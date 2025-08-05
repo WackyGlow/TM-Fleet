@@ -1,0 +1,123 @@
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Top bar */
+        .topbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+        }
+
+        .topbar .company {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .topbar .project {
+            font-size: 18px;
+            color: #a8c8ec;
+        }
+
+        /* Map container */
+        #map {
+            height: calc(100vh - 60px);
+            margin-top: 60px;
+        }
+
+        /* Ship info sidebar */
+        .ship-sidebar {
+            position: fixed;
+            top: 60px;
+            right: -400px;
+            width: 400px;
+            height: calc(100vh - 60px);
+            background: white;
+            box-shadow: -2px 0 10px rgba(0,0,0,0.3);
+            transition: right 0.3s ease;
+            z-index: 1001;
+            overflow-y: auto;
+        }
+
+        .ship-sidebar.open {
+            right: 0;
+        }
+
+        .sidebar-header {
+            background: #1e3c72;
+            color: white;
+            padding: 15px 20px;
+            position: sticky;
+            top: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .sidebar-close {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sidebar-content {
+            padding: 20px;
+        }
+
+        .info-section {
+            margin-bottom: 20px;
+        }
+
+        .info-section h3 {
+            margin: 0 0 10px 0;
+            color: #1e3c72;
+            border-bottom: 2px solid #e0e0e0;
+            padding-bottom: 5px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .info-label {
+            font-weight: bold;
+            color: #666;
+        }
+
+        .info-value {
+            color: #333;
+        }
+
+        .ship-info {
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        /* Custom ship icon styling */
+        .ship-div-icon {
+            background: none !important;
+            border: none !important;
+        }
