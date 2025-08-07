@@ -1,0 +1,4 @@
+type: sw.application
+version: "1.0.0"
+name: "SpyFleet"
+description: "Flask App for viewing ships in Harbour"

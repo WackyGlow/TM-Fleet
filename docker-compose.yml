@@ -1,0 +1,26 @@
+version: '2.1'
+
+services:
+  ais-catcher:
+    image: ghcr.io/jvde-github/ais-catcher-control:edge
+    container_name: ais-catcher
+    restart: always
+    privileged: true
+    ports:
+      - "8100:8100"
+      - "8110:8110"
+    devices:
+      - "/dev/bus/usb:/dev/bus/usb"
+
+  tm-fleet:
+    build: .
+    container_name: tm-fleet
+    restart: always
+    ports:
+      - "5000:5000"
+      - "15100:15100/udp"
+    volumes:
+      - fleet-data:/app/data
+
+volumes:
+  fleet-data:

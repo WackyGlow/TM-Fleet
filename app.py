@@ -155,9 +155,9 @@ def udp_listener():
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         print(f"📡 Created UDP socket with port reuse")
 
-        sock.bind(("0.0.0.0", devPort))
-        print(f"✅ UDP listener successfully bound to 0.0.0.0:{devPort}")
-        print(f"🔍 Waiting for AIS data from 10.0.16.186:{devPort}...")
+        sock.bind(("0.0.0.0", prodPort))
+        print(f"✅ UDP listener successfully bound to 0.0.0.0:{prodPort}")
+        print(f"🔍 Waiting for AIS data from 10.0.16.186:{prodPort}...")
 
         message_count = 0
         while True:
@@ -292,7 +292,7 @@ if __name__ == "__main__":
     time.sleep(2)
 
     print(f"🌐 MAIN: Starting Flask app...")
-    print(f"📡 MAIN: UDP should be listening on port {devPort}")
+    print(f"📡 MAIN: UDP should be listening on port {prodPort}")
 
     if t.is_alive():
         print("✅ MAIN: UDP listener thread is running")
