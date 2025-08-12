@@ -228,7 +228,7 @@ def get_db_ships():
 def get_ship_info(mmsi):
     """Get detailed information for a specific ship."""
     ship_details_db = AISDatabase.get_ship_details(mmsi)
-    ship_track = AISDatabase.get_ship_track(mmsi, hours=24)
+    ship_track = AISDatabase.get_ship_track(mmsi, hours=2)
 
     return jsonify({
         "ship": ship_details_db,

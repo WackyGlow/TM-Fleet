@@ -374,7 +374,7 @@ const map = L.map('map').setView([55.46, 8.45], 12); // Esbjerg
                 console.error('Error updating ships:', error);
             }
         }
-        
+
         map.on('zoomend', function() {
             const currentZoom = map.getZoom();
             if (currentZoom < 16) {
