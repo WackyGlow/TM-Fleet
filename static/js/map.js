@@ -255,23 +255,21 @@ const map = L.map('map').setView([55.46, 8.45], 12); // Esbjerg
         }
 
         function createShipLabel(shipName, isHighlighted) {
-            const bgColor = isHighlighted ? 'rgba(255, 51, 51, 0.9)' : 'rgba(0, 0, 0, 0.8)';
+            const textColor = isHighlighted ? '#dc2626' : '#1e293b';
 
             return L.divIcon({
                 html: `<div style="
-                    background: ${bgColor};
-                    color: white;
-                    padding: 2px 8px;
-                    border-radius: 4px;
+                    color: ${textColor};
                     font-size: 12px;
-                    font-weight: bold;
+                    font-weight: 700;
+                    text-shadow: 1px 1px 2px rgba(255,255,255,0.8), -1px -1px 2px rgba(255,255,255,0.8);
                     white-space: nowrap;
-                    border: 1px solid #fff;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                    pointer-events: none;
+                    text-align: center;
                 ">${shipName}</div>`,
                 className: 'ship-label-icon',
                 iconSize: [0, 0],
-                iconAnchor: [0, -45],
+                iconAnchor: [-20, 8], // Position text below the ship
                 popupAnchor: [0, 0]
             });
         }
@@ -283,6 +281,9 @@ const map = L.map('map').setView([55.46, 8.45], 12); // Esbjerg
 
                 const ships = data.ships || [];
                 const highlighted = new Set(["219213000", "219024900"]); // Your highlighted MMSIs
+
+                // GET ZOOM LEVEL FIRST - before any processing
+                const currentZoom = map.getZoom();
 
                 // Remove ships that are no longer present
                 const currentMMSIs = new Set(ships.map(ship => ship.mmsi));
@@ -340,22 +341,6 @@ const map = L.map('map').setView([55.46, 8.45], 12); // Esbjerg
                         shipMarkers[mmsi].off('click').on('click', function() {
                             openShipSidebar(mmsi, ship, ship);
                         });
-
-                        // Handle ship labels for highlighted ships
-                        if (isHighlighted && shipName) {
-                            if (shipLabels[mmsi]) {
-                                shipLabels[mmsi].setLatLng([ship.latitude, ship.longitude]);
-                                shipLabels[mmsi].setIcon(createShipLabel(shipName, isHighlighted));
-                            } else {
-                                shipLabels[mmsi] = L.marker([ship.latitude, ship.longitude], {
-                                    icon: createShipLabel(shipName, isHighlighted),
-                                    interactive: false
-                                }).addTo(map);
-                            }
-                        } else if (shipLabels[mmsi]) {
-                            map.removeLayer(shipLabels[mmsi]);
-                            delete shipLabels[mmsi];
-                        }
                     } else {
                         // Create new marker
                         shipMarkers[mmsi] = L.marker([ship.latitude, ship.longitude], {
@@ -366,20 +351,43 @@ const map = L.map('map').setView([55.46, 8.45], 12); // Esbjerg
                         .on('click', function() {
                             openShipSidebar(mmsi, ship, ship);
                         });
+                    }
 
-                        // Add label for highlighted ships
-                        if (isHighlighted && shipName) {
+                    // Handle ship labels for highlighted ships (SAME LOGIC FOR BOTH NEW AND EXISTING)
+                    if (isHighlighted && shipName && currentZoom >= 16) {
+                        if (shipLabels[mmsi]) {
+                            shipLabels[mmsi].setLatLng([ship.latitude, ship.longitude]);
+                            shipLabels[mmsi].setIcon(createShipLabel(shipName, isHighlighted));
+                        } else {
                             shipLabels[mmsi] = L.marker([ship.latitude, ship.longitude], {
                                 icon: createShipLabel(shipName, isHighlighted),
-                                interactive: false
+                                interactive: false,
+                                zIndexOffset: 1000
                             }).addTo(map);
                         }
+                    } else if (shipLabels[mmsi]) {
+                        map.removeLayer(shipLabels[mmsi]);
+                        delete shipLabels[mmsi];
                     }
                 }
             } catch (error) {
                 console.error('Error updating ships:', error);
             }
         }
+        
+        map.on('zoomend', function() {
+            const currentZoom = map.getZoom();
+            if (currentZoom < 16) {
+                // Hide all labels when zoomed out
+                for (const mmsi in shipLabels) {
+                    if (shipLabels[mmsi]) {
+                        map.removeLayer(shipLabels[mmsi]);
+                        delete shipLabels[mmsi];
+                    }
+                }
+            }
+            // Labels will be shown on next updateShips cycle if zoomed in enough
+        });
 
         // Update ships every 2 seconds
         setInterval(updateShips, 2000);
