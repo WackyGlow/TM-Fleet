@@ -86,7 +86,7 @@ def start_udp_listener(ais_service):
 def start_web_server(app):
     """Start the Flask web server."""
     print("🌐 MAIN: Starting Flask web server...")
-    print(f"📡 MAIN: UDP listener active on port {app.config['AIS_DEV_PORT']}")
+    print(f"📡 MAIN: UDP listener active on port {app.config['AIS_UDP_PORT']}")
 
     # Start Flask (disable reloader to prevent double initialization)
     app.run(

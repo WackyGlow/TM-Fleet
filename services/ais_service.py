@@ -44,7 +44,7 @@ class AISService:
         """Start UDP listener for incoming AIS messages."""
         try:
             print("🚀 Starting UDP listener thread...")
-            port = self.app.config['AIS_DEV_PORT']
+            port = self.app.config['AIS_UDP_PORT']
 
             # Create and configure socket
             sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
