@@ -1,0 +1,336 @@
+/* Track Ships Page Styles */
+
+.track-container {
+    max-width: 1200px;
+    margin: 80px auto 20px;
+    padding: 20px;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+}
+
+.section {
+    margin-bottom: 40px;
+}
+
+.section h2 {
+    color: #1e3c72;
+    border-bottom: 2px solid #e0e0e0;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+/* Search Container */
+.search-container {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+
+.search-input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+/* Button Styles */
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: background-color 0.3s;
+}
+
+.btn-primary {
+    background: #1e3c72;
+    color: white;
+}
+
+.btn-primary:hover {
+    background: #2a5298;
+}
+
+.btn-secondary {
+    background: #6b7280;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background: #4b5563;
+}
+
+.btn-danger {
+    background: #dc2626;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #b91c1c;
+}
+
+.btn-success {
+    background: #16a34a;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #15803d;
+}
+
+.btn-small {
+    padding: 5px 10px;
+    font-size: 12px;
+}
+
+/* Table Styles */
+.ships-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+}
+
+.ships-table th,
+.ships-table td {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.ships-table th {
+    background: #f8f9fa;
+    font-weight: bold;
+    color: #1e3c72;
+}
+
+.ships-table tr:hover {
+    background: #f8f9fa;
+}
+
+.ships-table th.sortable {
+    cursor: pointer;
+    user-select: none;
+}
+
+.ships-table th.sortable:hover {
+    background: #e2e8f0;
+}
+
+.sort-indicator {
+    font-size: 0.8em;
+    margin-left: 5px;
+    color: #6b7280;
+}
+
+/* Status Indicators */
+.status-active {
+    color: #16a34a;
+    font-weight: bold;
+}
+
+.status-inactive {
+    color: #6b7280;
+}
+
+/* Pagination Controls */
+.pagination-controls {
+    margin: 15px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.pagination-controls label {
+    margin-right: 10px;
+}
+
+.pagination-controls select {
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+}
+
+.pagination-info {
+    color: #6b7280;
+    font-size: 14px;
+}
+
+.pagination-buttons {
+    display: flex;
+    gap: 2px;
+}
+
+.pagination-buttons button {
+    padding: 5px 10px;
+    margin: 0;
+    border: 1px solid #ddd;
+    background: white;
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 12px;
+}
+
+.pagination-buttons button:hover {
+    background: #f8f9fa;
+}
+
+.pagination-buttons button.active {
+    background: #1e3c72;
+    color: white;
+    border-color: #1e3c72;
+}
+
+.pagination-buttons button:disabled {
+    background: #f8f9fa;
+    color: #6b7280;
+    cursor: not-allowed;
+}
+
+/* Form Styles */
+.manual-add {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 6px;
+    border: 1px solid #e0e0e0;
+}
+
+.form-group {
+    margin-bottom: 15px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+    color: #374151;
+}
+
+.form-group input,
+.form-group textarea {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.form-group textarea {
+    height: 60px;
+    resize: vertical;
+}
+
+/* Message Styles */
+.message {
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+}
+
+.message.success {
+    background: #dcfce7;
+    color: #166534;
+    border: 1px solid #bbf7d0;
+}
+
+.message.error {
+    background: #fef2f2;
+    color: #dc2626;
+    border: 1px solid #fecaca;
+}
+
+/* Loading and No Results */
+.loading {
+    display: none;
+    color: #6b7280;
+    font-style: italic;
+    padding: 20px;
+    text-align: center;
+}
+
+.no-results {
+    text-align: center;
+    color: #6b7280;
+    padding: 20px;
+    font-style: italic;
+}
+
+/* Edit Form */
+.edit-form {
+    display: none;
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 4px;
+    margin-top: 10px;
+}
+
+.edit-form input,
+.edit-form textarea {
+    width: 100%;
+    padding: 5px;
+    margin: 5px 0;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    box-sizing: border-box;
+}
+
+.edit-form textarea {
+    height: 50px;
+    resize: vertical;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .track-container {
+        margin: 80px 10px 20px;
+        padding: 15px;
+    }
+
+    .pagination-controls {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+
+    .search-container {
+        flex-direction: column;
+    }
+
+    .ships-table {
+        font-size: 12px;
+    }
+
+    .ships-table th,
+    .ships-table td {
+        padding: 8px 4px;
+    }
+
+    .btn {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    .btn-small {
+        padding: 4px 8px;
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 480px) {
+    .ships-table th,
+    .ships-table td {
+        padding: 6px 2px;
+        font-size: 11px;
+    }
+
+    .pagination-buttons {
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+}
