@@ -1,8 +1,89 @@
-from models import db, Ship, Position
-from datetime import datetime, timedelta
+from models import db, Ship, Position, TrackedShip
+from datetime import datetime, timedelta, UTC
+
 
 class AISDatabase:
     """Database service layer for AIS operations."""
+
+    @staticmethod
+    def get_all_ships_paginated(page=1, per_page=50, sort_field='ship_name', sort_direction='asc', search_query=''):
+        """Get all ships with pagination, sorting, and optional search."""
+        try:
+            # Define valid sort fields
+            valid_fields = {
+                'mmsi': Ship.mmsi,
+                'ship_name': Ship.ship_name,
+                'imo': Ship.imo,
+                'ship_type': Ship.ship_type,
+                'last_seen': Ship.last_seen,
+                'first_seen': Ship.first_seen
+            }
+
+            # Default to ship_name if invalid field
+            sort_column = valid_fields.get(sort_field, Ship.ship_name)
+
+            # Build query
+            query = Ship.query
+
+            # Apply search filter if provided
+            if search_query:
+                search_filter = db.or_(
+                    Ship.mmsi.contains(search_query),
+                    Ship.ship_name.contains(search_query),
+                    Ship.callsign.contains(search_query),
+                    Ship.imo.contains(search_query)
+                )
+                query = query.filter(search_filter)
+
+            # Apply sorting
+            if sort_direction.lower() == 'asc':
+                query = query.order_by(sort_column.asc())
+            else:
+                query = query.order_by(sort_column.desc())
+
+            # Get total count
+            total = query.count()
+
+            # Apply pagination
+            ships = query.offset((page - 1) * per_page).limit(per_page).all()
+
+            result = []
+            for ship in ships:
+                ship_dict = ship.to_dict()
+                # Add latest position if available
+                latest_pos = ship.latest_position
+                if latest_pos:
+                    ship_dict.update({
+                        'latitude': latest_pos.latitude,
+                        'longitude': latest_pos.longitude,
+                        'course': latest_pos.course,
+                        'speed': latest_pos.speed,
+                        'heading': latest_pos.heading,
+                        'nav_status': latest_pos.nav_status
+                    })
+                # Add tracking status
+                ship_dict['is_tracked'] = ship.is_tracked
+                result.append(ship_dict)
+
+            return {
+                'ships': result,
+                'total': total,
+                'page': page,
+                'per_page': per_page,
+                'total_pages': (total + per_page - 1) // per_page,
+                'search_query': search_query
+            }
+
+        except Exception as e:
+            print(f"❌ Error getting paginated ships: {e}")
+            return {
+                'ships': [],
+                'total': 0,
+                'page': page,
+                'per_page': per_page,
+                'total_pages': 0,
+                'search_query': search_query
+            }
 
     @staticmethod
     def init_database(app):
@@ -18,7 +99,7 @@ class AISDatabase:
             # Get or create ship
             ship = Ship.query.get(mmsi)
             if not ship:
-                ship = Ship(mmsi=mmsi, first_seen=datetime.utcnow())
+                ship = Ship(mmsi=mmsi, first_seen=datetime.now(UTC))
                 db.session.add(ship)
 
             # Update ship data
@@ -39,11 +120,11 @@ class AISDatabase:
             # Ensure ship exists
             ship = Ship.query.get(mmsi)
             if not ship:
-                ship = Ship(mmsi=mmsi, first_seen=datetime.utcnow())
+                ship = Ship(mmsi=mmsi, first_seen=datetime.now(UTC))
                 db.session.add(ship)
 
             # Update ship's last seen
-            ship.last_seen = datetime.utcnow()
+            ship.last_seen = datetime.now(UTC)
 
             # Create position record
             position = Position(
@@ -56,8 +137,8 @@ class AISDatabase:
                 nav_status=position_data.get('nav_status'),
                 turn_rate=position_data.get('turn_rate'),
                 position_accuracy=position_data.get('position_accuracy'),
-                timestamp=position_data['timestamp'] if isinstance(position_data['timestamp'], datetime) 
-                         else datetime.fromisoformat(position_data['timestamp'].replace('Z', '+00:00')),
+                timestamp=position_data['timestamp'] if isinstance(position_data['timestamp'], datetime)
+                else datetime.fromisoformat(position_data['timestamp'].replace('Z', '+00:00')),
                 message_type=position_data['msg_type']
             )
 
@@ -70,10 +151,10 @@ class AISDatabase:
             db.session.rollback()
             return False
 
-    @staticmethod  
+    @staticmethod
     def get_recent_ships(hours=24):
         """Get ships seen in the last N hours with their latest positions."""
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
 
         # Get ships with their latest position
         ships = db.session.query(Ship).filter(
@@ -93,6 +174,8 @@ class AISDatabase:
                     'heading': latest_pos.heading,
                     'nav_status': latest_pos.nav_status
                 })
+            # Add tracking status
+            ship_dict['is_tracked'] = ship.is_tracked
             result.append(ship_dict)
 
         return result
@@ -101,12 +184,16 @@ class AISDatabase:
     def get_ship_details(mmsi):
         """Get detailed information for a specific ship."""
         ship = Ship.query.get(mmsi)
-        return ship.to_dict() if ship else None
+        if ship:
+            ship_dict = ship.to_dict()
+            ship_dict['is_tracked'] = ship.is_tracked
+            return ship_dict
+        return None
 
     @staticmethod
     def get_ship_track(mmsi, hours=24):
         """Get position history for a ship."""
-        cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+        cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
 
         positions = Position.query.filter(
             Position.mmsi == mmsi,
@@ -119,7 +206,7 @@ class AISDatabase:
     def cleanup_old_positions(days=7):
         """Remove position data older than specified days."""
         try:
-            cutoff_time = datetime.utcnow() - timedelta(days=days)
+            cutoff_time = datetime.now(UTC) - timedelta(days=days)
 
             deleted_count = Position.query.filter(
                 Position.timestamp < cutoff_time
@@ -140,14 +227,16 @@ class AISDatabase:
         try:
             ship_count = Ship.query.count()
             position_count = Position.query.count()
+            tracked_count = TrackedShip.query.count()
 
             # Active ships in last hour
-            cutoff = datetime.utcnow() - timedelta(hours=1)
+            cutoff = datetime.now(UTC) - timedelta(hours=1)
             active_ships = Ship.query.filter(Ship.last_seen > cutoff).count()
 
             return {
                 'total_ships': ship_count,
                 'total_positions': position_count,
+                'tracked_ships': tracked_count,
                 'active_ships_last_hour': active_ships
             }
 
@@ -155,211 +244,147 @@ class AISDatabase:
             print(f"❌ Error getting database stats: {e}")
             return {}
 
-class AISMessageProcessor:
-    """Handles processing of decoded AIS messages."""
-
-    def __init__(self, ships_dict, ship_details_dict, highlighted_mmsis):
-        self.ships = ships_dict
-        self.ship_details = ship_details_dict
-        self.highlighted_mmsis = highlighted_mmsis
-
-    def process_decoded_message(self, decoded_message, app_context):
-        """Process a decoded AIS message and update both memory and database."""
+    # New methods for tracked ships management
+    @staticmethod
+    def get_tracked_ships():
+        """Get all tracked ships with their current data."""
         try:
-            mmsi = str(decoded_message.mmsi)
+            tracked_ships = TrackedShip.query.join(Ship, TrackedShip.mmsi == Ship.mmsi).all()
+            result = []
 
-            # Handle position messages (1, 2, 3, 18, 19, etc.)
-            if hasattr(decoded_message, 'lat') and hasattr(decoded_message, 'lon'):
-                self._process_position_message(decoded_message, mmsi, app_context)
+            for tracked in tracked_ships:
+                tracked_dict = tracked.to_dict()
+                # Add latest position if available
+                if tracked.ship:
+                    latest_pos = tracked.ship.latest_position
+                    if latest_pos:
+                        tracked_dict['ship_data'].update({
+                            'latitude': latest_pos.latitude,
+                            'longitude': latest_pos.longitude,
+                            'course': latest_pos.course,
+                            'speed': latest_pos.speed,
+                            'heading': latest_pos.heading,
+                            'nav_status': latest_pos.nav_status
+                        })
+                result.append(tracked_dict)
 
-            # Handle static data messages (5, 24)
-            elif decoded_message.msg_type in [5, 24]:
-                self._process_static_message(decoded_message, mmsi, app_context)
+            return result
+        except Exception as e:
+            print(f"❌ Error getting tracked ships: {e}")
+            return []
+
+    @staticmethod
+    def add_tracked_ship(mmsi, name=None, notes=None, added_by=None):
+        """Add a ship to the tracking list."""
+        try:
+            # Check if already tracked
+            existing = TrackedShip.query.filter_by(mmsi=mmsi).first()
+            if existing:
+                return {'success': False, 'message': 'Ship is already being tracked'}
+
+            # Ensure ship exists in database
+            ship = Ship.query.get(mmsi)
+            if not ship:
+                ship = Ship(mmsi=mmsi, first_seen=datetime.now(UTC))
+                db.session.add(ship)
+
+            # Create tracked ship entry
+            tracked_ship = TrackedShip(
+                mmsi=mmsi,
+                name=name or (ship.ship_name if ship.ship_name else None),
+                notes=notes,
+                added_by=added_by,
+                added_date=datetime.now(UTC)
+            )
+
+            db.session.add(tracked_ship)
+            db.session.commit()
+
+            return {'success': True, 'message': 'Ship added to tracking list'}
 
         except Exception as e:
-            print(f"❌ Error processing decoded message: {e}")
-            print(f"Message type: {getattr(decoded_message, 'msg_type', 'unknown')}")
-
-    def _process_position_message(self, decoded_message, mmsi, app_context):
-        """Process position-type AIS messages."""
-        lat = decoded_message.lat
-        lon = decoded_message.lon
-
-        if lat is not None and lon is not None and lat != 91.0 and lon != 181.0:
-            # Update in-memory data for real-time display
-            self.ships[mmsi] = {
-                "lat": float(lat),
-                "lon": float(lon)
-            }
-
-            ship_info = {
-                'mmsi': mmsi,
-                'msg_type': decoded_message.msg_type,
-                'latitude': float(lat),
-                'longitude': float(lon),
-                'timestamp': datetime.utcnow()
-            }
-
-            # Add optional fields if available
-            optional_fields = [
-                ('speed', 'speed'),
-                ('course', 'course'),
-                ('heading', 'heading'),
-                ('status', 'nav_status'),
-                ('turn', 'turn_rate'),
-                ('accuracy', 'position_accuracy')
-            ]
-
-            for attr, key in optional_fields:
-                if hasattr(decoded_message, attr):
-                    value = getattr(decoded_message, attr)
-                    if value is not None:
-                        ship_info[key] = value
-
-            self.ship_details[mmsi] = ship_info
-            print(f"📍 Ship {mmsi}: {lat:.4f}, {lon:.4f} (msg {decoded_message.msg_type})")
-
-            # Save position to database using ORM
-            with app_context():
-                AISDatabase.save_position(mmsi, ship_info)
-        else:
-            print(f"⚠️ Invalid coordinates for MMSI {mmsi}: {lat}, {lon}")
-
-    def _process_static_message(self, decoded_message, mmsi, app_context):
-        """Process static data AIS messages."""
-        # Get existing info or create new
-        ship_info = self.ship_details.get(mmsi, {
-            'mmsi': mmsi,
-            'msg_type': decoded_message.msg_type,
-            'timestamp': datetime.utcnow()
-        })
-
-        # Add static data fields
-        static_fields = [
-            ('shipname', 'ship_name'),
-            ('ship_type', 'ship_type'),
-            ('callsign', 'callsign'),
-            ('imo', 'imo'),
-            ('destination', 'destination'),
-            ('eta_month', 'eta_month'),
-            ('eta_day', 'eta_day'),
-            ('eta_hour', 'eta_hour'),
-            ('eta_minute', 'eta_minute'),
-            ('draught', 'draught'),
-            ('to_bow', 'to_bow'),
-            ('to_stern', 'to_stern'),
-            ('to_port', 'to_port'),
-            ('to_starboard', 'to_starboard')
-        ]
-
-        for attr, key in static_fields:
-            if hasattr(decoded_message, attr):
-                value = getattr(decoded_message, attr)
-                if value is not None:
-                    # Clean up string fields
-                    if isinstance(value, str):
-                        value = value.strip('@').strip()
-                    if value:  # Only add non-empty values
-                        ship_info[key] = value
-
-        self.ship_details[mmsi] = ship_info
-        ship_name = ship_info.get('ship_name', 'Unknown')
-        print(f"📋 Static data for {mmsi}: {ship_name} (msg {decoded_message.msg_type})")
-
-        # Save static data to database using ORM
-        with app_context():
-            AISDatabase.save_ship_static_data(mmsi, ship_info)
-
-class MultipartMessageBuffer:
-    """Handles buffering and reassembly of multipart AIS messages."""
-
-    def __init__(self):
-        self.buffer = {}
-
-    def add_fragment(self, line, total_fragments, fragment_number, message_id, channel):
-        """Add a fragment to the buffer and return complete message if ready."""
-        # Create unique key for this multipart message
-        buffer_key = f"{message_id}_{channel}" if message_id else f"no_id_{channel}_{total_fragments}"
-
-        if buffer_key not in self.buffer:
-            self.buffer[buffer_key] = {
-                'fragments': {},
-                'total': total_fragments,
-                'timestamp': datetime.now()
-            }
-
-        # Store this fragment
-        self.buffer[buffer_key]['fragments'][fragment_number] = line
-
-        # Check if we have all fragments
-        if len(self.buffer[buffer_key]['fragments']) == total_fragments:
-            # We have all fragments - reassemble
-            fragments = self.buffer[buffer_key]['fragments']
-
-            # Sort fragments by fragment number and create list
-            sorted_fragments = []
-            for i in range(1, total_fragments + 1):
-                if i in fragments:
-                    sorted_fragments.append(fragments[i])
-                else:
-                    print(f"⚠️ Missing fragment {i} for message {buffer_key}")
-                    return None
-
-            # Clean up the buffer
-            del self.buffer[buffer_key]
-
-            print(f"✅ Assembled multipart message {buffer_key} ({total_fragments} parts)")
-            return sorted_fragments
-        else:
-            fragments_received = len(self.buffer[buffer_key]['fragments'])
-            print(f"🔄 Buffering fragment {fragment_number}/{total_fragments} for {buffer_key} (have {fragments_received}/{total_fragments})")
-            return None
-
-    def cleanup_old_fragments(self, max_age_seconds=60):
-        """Clean up old incomplete multipart messages."""
-        current_time = datetime.now()
-        keys_to_remove = []
-
-        for key, data in self.buffer.items():
-            if (current_time - data['timestamp']).total_seconds() > max_age_seconds:
-                keys_to_remove.append(key)
-
-        for key in keys_to_remove:
-            fragments_count = len(self.buffer[key]['fragments'])
-            total_expected = self.buffer[key]['total']
-            print(f"🧹 Cleaning up incomplete message {key} ({fragments_count}/{total_expected} fragments)")
-            del self.buffer[key]
-
-    def get_stats(self):
-        """Get buffer statistics."""
-        return {
-            'buffered_message_count': len(self.buffer),
-            'buffered_messages': {k: f"{len(v['fragments'])}/{v['total']}" for k, v in self.buffer.items()}
-        }
-
-class NMEAParser:
-    """Handles parsing of NMEA message format."""
+            print(f"❌ Error adding tracked ship {mmsi}: {e}")
+            db.session.rollback()
+            return {'success': False, 'message': f'Error adding ship: {str(e)}'}
 
     @staticmethod
-    def parse_nmea_fields(line):
-        """Parse NMEA line and extract fragment information."""
-        parts = line.split(',')
-        if len(parts) < 6:
-            return None
-
+    def remove_tracked_ship(mmsi):
+        """Remove a ship from the tracking list."""
         try:
-            return {
-                'total_fragments': int(parts[1]),
-                'fragment_number': int(parts[2]),
-                'message_id': parts[3] if parts[3] else None,
-                'channel': parts[4]
-            }
-        except (ValueError, IndexError):
-            print(f"⚠️ Invalid NMEA format: {line}")
-            return None
+            tracked_ship = TrackedShip.query.filter_by(mmsi=mmsi).first()
+            if not tracked_ship:
+                return {'success': False, 'message': 'Ship is not being tracked'}
+
+            db.session.delete(tracked_ship)
+            db.session.commit()
+
+            return {'success': True, 'message': 'Ship removed from tracking list'}
+
+        except Exception as e:
+            print(f"❌ Error removing tracked ship {mmsi}: {e}")
+            db.session.rollback()
+            return {'success': False, 'message': f'Error removing ship: {str(e)}'}
 
     @staticmethod
-    def is_ais_message(line):
-        """Check if line is an AIS message."""
-        line = line.strip()
-        return line and line.startswith(("!AIVDM", "!AIVDO"))
+    def update_tracked_ship(mmsi, name=None, notes=None):
+        """Update tracked ship information."""
+        try:
+            tracked_ship = TrackedShip.query.filter_by(mmsi=mmsi).first()
+            if not tracked_ship:
+                return {'success': False, 'message': 'Ship is not being tracked'}
+
+            if name is not None:
+                tracked_ship.name = name
+            if notes is not None:
+                tracked_ship.notes = notes
+
+            db.session.commit()
+
+            return {'success': True, 'message': 'Tracked ship updated successfully'}
+
+        except Exception as e:
+            print(f"❌ Error updating tracked ship {mmsi}: {e}")
+            db.session.rollback()
+            return {'success': False, 'message': f'Error updating ship: {str(e)}'}
+
+    @staticmethod
+    def get_tracked_mmsis():
+        """Get set of all tracked MMSIs for quick lookup."""
+        try:
+            tracked_ships = TrackedShip.query.all()
+            return {ship.mmsi for ship in tracked_ships}
+        except Exception as e:
+            print(f"❌ Error getting tracked MMSIs: {e}")
+            return set()
+
+    @staticmethod
+    def search_ships(query, limit=20):
+        """Search ships by name, MMSI, or callsign."""
+        try:
+            # Search by MMSI, ship name, or callsign
+            ships = Ship.query.filter(
+                db.or_(
+                    Ship.mmsi.contains(query),
+                    Ship.ship_name.contains(query),
+                    Ship.callsign.contains(query)
+                )
+            ).limit(limit).all()
+
+            result = []
+            for ship in ships:
+                ship_dict = ship.to_dict()
+                ship_dict['is_tracked'] = ship.is_tracked
+                # Add latest position if available
+                latest_pos = ship.latest_position
+                if latest_pos:
+                    ship_dict.update({
+                        'latitude': latest_pos.latitude,
+                        'longitude': latest_pos.longitude,
+                        'last_seen': ship.last_seen.isoformat() if ship.last_seen else None
+                    })
+                result.append(ship_dict)
+
+            return result
+        except Exception as e:
+            print(f"❌ Error searching ships: {e}")
+            return []
