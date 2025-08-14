@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Track Ships - SpyFleet</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/map.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/trackships.css') }}">
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="topbar">
+        <div class="company">Tee Marine</div>
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <a href="/" style="color: #a8c8ec; text-decoration: none;">Map View</a>
+            <a href="/track" style="color: white; text-decoration: none; font-weight: bold;">Track Ships</a>
+            <a href="/info" style="color: #a8c8ec; text-decoration: none;">Info</a>
+        </div>
+        <div class="project">SpyFleet</div>
+    </div>
+
+    <div class="track-container">
+        <!-- Currently Tracked Ships -->
+        <div class="section">
+            <h2>🔴 Currently Tracked Ships</h2>
+            <div id="trackedMessage" class="message" style="display: none;"></div>
+            <div id="trackedLoading" class="loading">Loading tracked ships...</div>
+            <div id="trackedShipsContainer">
+                <table class="ships-table" id="trackedShipsTable" style="display: none;">
+                    <thead>
+                        <tr>
+                            <th>MMSI</th>
+                            <th>Name</th>
+                            <th>Type</th>
+                            <th>Last Seen</th>
+                            <th>Status</th>
+                            <th>Notes</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trackedShipsBody">
+                    </tbody>
+                </table>
+                <div id="noTrackedShips" class="no-results" style="display: none;">
+                    No ships are currently being tracked.
+                </div>
+            </div>
+        </div>
+
+        <!-- Browse All Ships -->
+        <div class="section">
+            <h2>🚢 Browse All Ships</h2>
+            <p>All ships detected by the AIS system (last 7 days):</p>
+
+            <!-- Search integrated into ship list -->
+            <div class="search-container">
+                <input type="text"
+                       id="searchInput"
+                       class="search-input"
+                       placeholder="Search by ship name, MMSI, IMO, or callsign...">
+                <button onclick="searchShips()" class="btn btn-primary">Search</button>
+                <button onclick="clearSearch()" class="btn btn-secondary">Clear</button>
+            </div>
+
+            <div class="pagination-controls">
+                <div>
+                    <label for="shipsPerPage">Ships per page:</label>
+                    <select id="shipsPerPage" onchange="changeShipsPerPage()">
+                        <option value="20">20</option>
+                        <option value="50" selected>50</option>
+                        <option value="100">100</option>
+                    </select>
+                </div>
+                <div id="paginationInfo" class="pagination-info"></div>
+                <div id="paginationButtons" class="pagination-buttons"></div>
+            </div>
+
+            <div id="allShipsMessage" class="message" style="display: none;"></div>
+            <div id="allShipsLoading" class="loading">Loading ships...</div>
+            <div id="allShipsContainer" style="display: none;">
+                <table class="ships-table" id="allShipsTable">
+                    <thead>
+                        <tr>
+                            <th class="sortable" onclick="sortShips('ship_name')">
+                                Name <span id="sort-ship_name" class="sort-indicator">⇅</span>
+                            </th>
+                            <th class="sortable" onclick="sortShips('mmsi')">
+                                MMSI <span id="sort-mmsi" class="sort-indicator">⇅</span>
+                            </th>
+                            <th class="sortable" onclick="sortShips('imo')">
+                                IMO <span id="sort-imo" class="sort-indicator">⇅</span>
+                            </th>
+                            <th class="sortable" onclick="sortShips('ship_type')">
+                                Type <span id="sort-ship_type" class="sort-indicator">⇅</span>
+                            </th>
+                            <th class="sortable" onclick="sortShips('last_seen')">
+                                Last Seen <span id="sort-last_seen" class="sort-indicator">⇅</span>
+                            </th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="allShipsBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Add Ships Manually -->
+        <div class="section">
+            <h2>➕ Add Ship Manually</h2>
+
+            <div class="manual-add">
+                <p>Add a ship by MMSI if it's not yet detected by the AIS system:</p>
+                <div id="manualMessage" class="message" style="display: none;"></div>
+                <form id="manualAddForm">
+                    <div class="form-group">
+                        <label for="manualMmsi">MMSI (Required):</label>
+                        <input type="text"
+                               id="manualMmsi"
+                               name="mmsi"
+                               required
+                               pattern="[0-9]{9}"
+                               placeholder="9-digit MMSI number">
+                    </div>
+                    <div class="form-group">
+                        <label for="manualName">Custom Name (Optional):</label>
+                        <input type="text"
+                               id="manualName"
+                               name="name"
+                               placeholder="Custom name for this ship">
+                    </div>
+                    <div class="form-group">
+                        <label for="manualNotes">Notes (Optional):</label>
+                        <textarea id="manualNotes"
+                                  name="notes"
+                                  placeholder="Why are you tracking this ship?"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success">Add to Tracking</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/trackships.js') }}"></script>
+</body>
+</html>
