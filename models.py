@@ -1,5 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime, timedelta
+from datetime import datetime, timezone, timedelta
 from sqlalchemy import Index
 
 db = SQLAlchemy()
@@ -20,8 +20,8 @@ class Ship(db.Model):
     to_stern = db.Column(db.Integer)
     to_port = db.Column(db.Integer)
     to_starboard = db.Column(db.Integer)
-    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
-    last_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    first_seen = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    last_seen = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     # Relationship to positions
     positions = db.relationship('Position', backref='ship', lazy='dynamic', cascade='all, delete-orphan')
@@ -53,7 +53,7 @@ class Ship(db.Model):
             if value is not None and hasattr(self, field):
                 setattr(self, field, value)
 
-        self.last_seen = datetime.utcnow()
+        self.last_seen = datetime.now(timezone.utc)
 
     @property
     def latest_position(self):
@@ -65,7 +65,7 @@ class Ship(db.Model):
         if not self.last_seen:
             return False
 
-        cutoff = datetime.utcnow() - timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         return self.last_seen > cutoff
 
     @property
@@ -88,7 +88,7 @@ class Position(db.Model):
     nav_status = db.Column(db.Integer)
     turn_rate = db.Column(db.Float)
     position_accuracy = db.Column(db.Boolean)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
     message_type = db.Column(db.Integer)
 
     # Indexes for better performance
@@ -126,7 +126,7 @@ class TrackedShip(db.Model):
     mmsi = db.Column(db.String(20), db.ForeignKey('ships.mmsi'), nullable=False, unique=True)
     name = db.Column(db.String(100))  # Custom name/alias for the tracked ship
     notes = db.Column(db.Text)  # Optional notes about why this ship is tracked
-    added_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    added_date = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
     added_by = db.Column(db.String(100))  # Who added this ship to tracking
 
     # Relationship to ship
