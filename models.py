@@ -68,6 +68,11 @@ class Ship(db.Model):
         cutoff = datetime.utcnow() - timedelta(hours=hours)
         return self.last_seen > cutoff
 
+    @property
+    def is_tracked(self):
+        """Check if this ship is being tracked."""
+        return TrackedShip.query.filter_by(mmsi=self.mmsi).first() is not None
+
 
 class Position(db.Model):
     """Ship position data model."""
@@ -110,4 +115,35 @@ class Position(db.Model):
             'position_accuracy': self.position_accuracy,
             'timestamp': self.timestamp.isoformat() if self.timestamp else None,
             'message_type': self.message_type
+        }
+
+
+class TrackedShip(db.Model):
+    """Model for tracking specific ships of interest."""
+    __tablename__ = 'tracked_ships'
+
+    id = db.Column(db.Integer, primary_key=True)
+    mmsi = db.Column(db.String(20), db.ForeignKey('ships.mmsi'), nullable=False, unique=True)
+    name = db.Column(db.String(100))  # Custom name/alias for the tracked ship
+    notes = db.Column(db.Text)  # Optional notes about why this ship is tracked
+    added_date = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    added_by = db.Column(db.String(100))  # Who added this ship to tracking
+
+    # Relationship to ship
+    ship = db.relationship('Ship', backref='tracking_info')
+
+    def __repr__(self):
+        return f'<TrackedShip {self.mmsi}: {self.name or "Unnamed"}>'
+
+    def to_dict(self):
+        """Convert tracked ship to dictionary."""
+        ship_data = self.ship.to_dict() if self.ship else {}
+        return {
+            'id': self.id,
+            'mmsi': self.mmsi,
+            'name': self.name,
+            'notes': self.notes,
+            'added_date': self.added_date.isoformat(),
+            'added_by': self.added_by,
+            'ship_data': ship_data
         }
