@@ -5,7 +5,7 @@ from flask import Flask
 # Import configuration and services
 from config import Config
 from services.ais_service import AISService
-from database import AISDatabase
+from database import ShipService
 from models import db
 
 # Import authentication
@@ -25,7 +25,7 @@ def create_app():
 
     # Initialize database
     db.init_app(app)
-    AISDatabase.init_database(app)
+    ShipService.init_database(app)
 
     # Register authentication blueprint
     app.register_blueprint(auth_bp)

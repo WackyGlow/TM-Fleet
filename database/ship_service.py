@@ -2,8 +2,15 @@ from models import db, Ship, Position, TrackedShip
 from datetime import datetime, timedelta, UTC
 
 
-class AISDatabase:
-    """Database service layer for AIS operations with authentication support."""
+class ShipService:
+    """Service class for ship-related database operations."""
+
+    @staticmethod
+    def init_database(app):
+        """Initialize database with Flask app context."""
+        with app.app_context():
+            db.create_all()
+            print("✅ Database tables created successfully")
 
     @staticmethod
     def get_all_ships_paginated(page=1, per_page=50, sort_field='ship_name', sort_direction='asc', search_query=''):
@@ -86,13 +93,6 @@ class AISDatabase:
             }
 
     @staticmethod
-    def init_database(app):
-        """Initialize database with Flask app context."""
-        with app.app_context():
-            db.create_all()
-            print("✅ Database tables created successfully")
-
-    @staticmethod
     def save_ship_static_data(mmsi, ship_data):
         """Save or update ship static data."""
         try:
@@ -126,23 +126,29 @@ class AISDatabase:
             # Update ship's last seen
             ship.last_seen = datetime.now(UTC)
 
-            # Create position record
-            position = Position(
-                mmsi=mmsi,
-                latitude=position_data['latitude'],
-                longitude=position_data['longitude'],
-                course=position_data.get('course'),
-                speed=position_data.get('speed'),
-                heading=position_data.get('heading'),
-                nav_status=position_data.get('nav_status'),
-                turn_rate=position_data.get('turn_rate'),
-                position_accuracy=position_data.get('position_accuracy'),
-                timestamp=position_data['timestamp'] if isinstance(position_data['timestamp'], datetime)
-                else datetime.fromisoformat(position_data['timestamp'].replace('Z', '+00:00')),
-                message_type=position_data['msg_type']
-            )
+            # Get existing position or create new one
+            position = Position.query.get(mmsi)
+            if not position:
+                position = Position(mmsi=mmsi)
+                db.session.add(position)
 
-            db.session.add(position)
+            # Update position data
+            position.latitude = position_data['latitude']
+            position.longitude = position_data['longitude']
+            position.course = position_data.get('course')
+            position.speed = position_data.get('speed')
+            position.heading = position_data.get('heading')
+            position.nav_status = position_data.get('nav_status')
+            position.turn_rate = position_data.get('turn_rate')
+            position.position_accuracy = position_data.get('position_accuracy')
+            position.message_type = position_data.get('msg_type')
+
+            # Handle timestamp
+            if isinstance(position_data['timestamp'], datetime):
+                position.timestamp = position_data['timestamp']
+            else:
+                position.timestamp = datetime.fromisoformat(position_data['timestamp'].replace('Z', '+00:00'))
+
             db.session.commit()
             return True
 
@@ -243,119 +249,6 @@ class AISDatabase:
         except Exception as e:
             print(f"❌ Error getting database stats: {e}")
             return {}
-
-    # Tracked ships management
-    @staticmethod
-    def get_tracked_ships():
-        """Get all tracked ships with their current data."""
-        try:
-            tracked_ships = TrackedShip.query.join(Ship, TrackedShip.mmsi == Ship.mmsi).all()
-            result = []
-
-            for tracked in tracked_ships:
-                tracked_dict = tracked.to_dict()
-                # Add latest position if available
-                if tracked.ship:
-                    latest_pos = tracked.ship.latest_position
-                    if latest_pos:
-                        tracked_dict['ship_data'].update({
-                            'latitude': latest_pos.latitude,
-                            'longitude': latest_pos.longitude,
-                            'course': latest_pos.course,
-                            'speed': latest_pos.speed,
-                            'heading': latest_pos.heading,
-                            'nav_status': latest_pos.nav_status
-                        })
-                result.append(tracked_dict)
-
-            return result
-        except Exception as e:
-            print(f"❌ Error getting tracked ships: {e}")
-            return []
-
-    @staticmethod
-    def add_tracked_ship(mmsi, name=None, notes=None, added_by=None):
-        """Add a ship to the tracking list."""
-        try:
-            # Check if already tracked
-            existing = TrackedShip.query.filter_by(mmsi=mmsi).first()
-            if existing:
-                return {'success': False, 'message': 'Ship is already being tracked'}
-
-            # Ensure ship exists in database
-            ship = Ship.query.get(mmsi)
-            if not ship:
-                ship = Ship(mmsi=mmsi, first_seen=datetime.now(UTC))
-                db.session.add(ship)
-
-            # Create tracked ship entry
-            tracked_ship = TrackedShip(
-                mmsi=mmsi,
-                name=name or (ship.ship_name if ship.ship_name else None),
-                notes=notes,
-                added_by=added_by,
-                added_date=datetime.now(UTC)
-            )
-
-            db.session.add(tracked_ship)
-            db.session.commit()
-
-            return {'success': True, 'message': 'Ship added to tracking list'}
-
-        except Exception as e:
-            print(f"❌ Error adding tracked ship {mmsi}: {e}")
-            db.session.rollback()
-            return {'success': False, 'message': f'Error adding ship: {str(e)}'}
-
-    @staticmethod
-    def remove_tracked_ship(mmsi):
-        """Remove a ship from the tracking list."""
-        try:
-            tracked_ship = TrackedShip.query.filter_by(mmsi=mmsi).first()
-            if not tracked_ship:
-                return {'success': False, 'message': 'Ship is not being tracked'}
-
-            db.session.delete(tracked_ship)
-            db.session.commit()
-
-            return {'success': True, 'message': 'Ship removed from tracking list'}
-
-        except Exception as e:
-            print(f"❌ Error removing tracked ship {mmsi}: {e}")
-            db.session.rollback()
-            return {'success': False, 'message': f'Error removing ship: {str(e)}'}
-
-    @staticmethod
-    def update_tracked_ship(mmsi, name=None, notes=None):
-        """Update tracked ship information."""
-        try:
-            tracked_ship = TrackedShip.query.filter_by(mmsi=mmsi).first()
-            if not tracked_ship:
-                return {'success': False, 'message': 'Ship is not being tracked'}
-
-            if name is not None:
-                tracked_ship.name = name
-            if notes is not None:
-                tracked_ship.notes = notes
-
-            db.session.commit()
-
-            return {'success': True, 'message': 'Tracked ship updated successfully'}
-
-        except Exception as e:
-            print(f"❌ Error updating tracked ship {mmsi}: {e}")
-            db.session.rollback()
-            return {'success': False, 'message': f'Error updating ship: {str(e)}'}
-
-    @staticmethod
-    def get_tracked_mmsis():
-        """Get set of all tracked MMSIs for quick lookup."""
-        try:
-            tracked_ships = TrackedShip.query.all()
-            return {ship.mmsi for ship in tracked_ships}
-        except Exception as e:
-            print(f"❌ Error getting tracked MMSIs: {e}")
-            return set()
 
     @staticmethod
     def search_ships(query, limit=20):

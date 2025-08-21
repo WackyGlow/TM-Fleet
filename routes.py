@@ -5,7 +5,7 @@ Updated to add authentication protection to existing routes.
 
 from flask import render_template, jsonify, request, session, redirect, url_for
 from auth import login_required  # ADD THIS IMPORT
-from database import AISDatabase
+from database import ShipService, TrackingService
 
 
 def register_routes(app):
@@ -66,15 +66,15 @@ def register_api_routes(app):
     @login_required     # ADD THIS
     def get_db_ships():
         """Get recent ships from database."""
-        recent_ships = AISDatabase.get_recent_ships(hours=24)
+        recent_ships = ShipService.get_recent_ships(hours=24)
         return jsonify({"ships": recent_ships})
 
     @app.route("/db/ship/<mmsi>")
     @login_required     # ADD THIS
     def get_ship_info(mmsi):
         """Get detailed information for a specific ship."""
-        ship_details_db = AISDatabase.get_ship_details(mmsi)
-        ship_track = AISDatabase.get_ship_track(mmsi, hours=2)
+        ship_details_db = ShipService.get_ship_details(mmsi)
+        ship_track = ShipService.get_ship_track(mmsi, hours=2)
 
         return jsonify({
             "ship": ship_details_db,
@@ -85,7 +85,7 @@ def register_api_routes(app):
     @login_required     # ADD THIS
     def get_db_stats():
         """Get database statistics."""
-        return jsonify(AISDatabase.get_database_stats())
+        return jsonify(ShipService.get_database_stats())
 
     @app.route("/api/ships/all")
     @login_required     # ADD THIS
@@ -100,7 +100,7 @@ def register_api_routes(app):
         # Limit per_page to prevent abuse
         per_page = min(per_page, 200)
 
-        ships_data = AISDatabase.get_all_ships_paginated(
+        ships_data = ShipService.get_all_ships_paginated(
             page, per_page, sort_field, sort_direction, search_query
         )
         return jsonify(ships_data)
@@ -115,7 +115,7 @@ def register_api_routes(app):
         if not query:
             return jsonify({"ships": []})
 
-        ships = AISDatabase.search_ships(query, limit)
+        ships = ShipService.search_ships(query, limit)
         return jsonify({"ships": ships})
 
     # Tracked ships endpoints
@@ -123,7 +123,7 @@ def register_api_routes(app):
     @login_required     # ADD THIS
     def get_tracked_ships():
         """Get all tracked ships."""
-        tracked_ships = AISDatabase.get_tracked_ships()
+        tracked_ships = TrackingService.get_tracked_ships()
         return jsonify({"tracked_ships": tracked_ships})
 
     @app.route("/api/tracked-ships", methods=["POST"])
@@ -292,13 +292,13 @@ def register_debug_routes(app):
     """Register debug and maintenance endpoints - ADD @login_required."""
 
     @app.route("/debug")
-    @login_required     # ADD THIS
+    @login_required
     def debug():
         """Debug endpoint to see raw data."""
         from services.ais_service import AISService
         ais_service = AISService.get_instance()
 
-        db_stats = AISDatabase.get_database_stats()
+        db_stats = ShipService.get_database_stats()
         buffer_stats = ais_service.multipart_buffer.get_stats() if ais_service else {}
 
         return jsonify({
@@ -310,10 +310,10 @@ def register_debug_routes(app):
         })
 
     @app.route("/db/cleanup")
-    @login_required     # ADD THIS
+    @login_required
     def cleanup_database():
         """Manual database cleanup endpoint."""
-        deleted_count = AISDatabase.cleanup_old_positions(days=7)
+        deleted_count = ShipService.cleanup_old_positions(days=7)
         return jsonify({
             "message": "Database cleanup completed",
             "deleted_positions": deleted_count

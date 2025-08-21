@@ -1,5 +1,5 @@
 from datetime import datetime, UTC
-from database import AISDatabase
+from database import ShipService
 
 
 class AISMessageProcessor:
@@ -73,7 +73,7 @@ class AISMessageProcessor:
 
             # Save position to database using ORM
             with app_context():
-                AISDatabase.save_position(mmsi, ship_info)
+                ShipService.save_position(mmsi, ship_info)
         else:
             print(f"⚠️ Invalid coordinates for MMSI {mmsi}: {lat}, {lon}")
 
@@ -125,4 +125,4 @@ class AISMessageProcessor:
 
         # Save static data to database using ORM
         with app_context():
-            AISDatabase.save_ship_static_data(mmsi, ship_info)
+            ShipService.save_ship_static_data(mmsi, ship_info)

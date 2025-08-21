@@ -2,7 +2,7 @@ import socket
 import traceback
 from pyais import decode
 from utils import AISMessageProcessor, MultipartMessageBuffer, NMEAParser
-from database import AISDatabase
+from database import ShipService, TrackingService
 
 
 class AISService:
@@ -38,7 +38,7 @@ class AISService:
     def _get_tracked_mmsis(self):
         """Get current tracked MMSIs from database."""
         with self.app.app_context():
-            return AISDatabase.get_tracked_mmsis()
+            return TrackingService.get_tracked_mmsis()
 
     def start_udp_listener(self):
         """Start UDP listener for incoming AIS messages."""
@@ -142,7 +142,7 @@ class AISService:
             if self.message_count % db_cleanup_interval == 0:
                 with self.app.app_context():
                     cleanup_days = self.app.config['DB_CLEANUP_DAYS']
-                    AISDatabase.cleanup_old_positions(days=cleanup_days)
+                    ShipService.cleanup_old_positions(days=cleanup_days)
 
     def get_stats(self):
         """Get service statistics."""

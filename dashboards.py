@@ -1,6 +1,6 @@
 from flask import render_template, session, redirect, url_for
 from auth import login_required, role_required
-from database import AISDatabase
+from database import ShipService, TrackingService, CompanyService
 
 
 def register_dashboard_routes(app):
@@ -10,8 +10,7 @@ def register_dashboard_routes(app):
     @role_required('system_admin')
     def admin_dashboard():
         """Admin dashboard - full system overview"""
-        stats = AISDatabase.get_database_stats()
-        # TODO: Add recent activities, user management stats, etc.
+        stats = ShipService.get_database_stats()
 
         return render_template('dashboards/admin.html',
                                stats=stats,
@@ -24,13 +23,13 @@ def register_dashboard_routes(app):
         user_id = session.get('user_id')
 
         # Get company's tracked ships
-        tracked_ships = AISDatabase.get_company_tracked_ships(user_id)
+        tracked_ships = TrackingService.get_company_tracked_ships(user_id)
 
         # Get company statistics
         company_stats = {
             'tracked_ships': len(tracked_ships),
             'active_ships': len([s for s in tracked_ships if s.get('is_active', False)]),
-            'company_users': AISDatabase.get_company_user_count(user_id)
+            'company_users': CompanyService.get_company_user_count(user_id)
         }
 
         return render_template('dashboards/company.html',
@@ -45,7 +44,7 @@ def register_dashboard_routes(app):
         user_id = session.get('user_id')
 
         # Get ships assigned to this company user
-        assigned_ships = AISDatabase.get_user_assigned_ships(user_id)
+        assigned_ships = TrackingService.get_user_assigned_ships(user_id)
 
         user_stats = {
             'assigned_ships': len(assigned_ships),
@@ -64,7 +63,7 @@ def register_dashboard_routes(app):
         user_id = session.get('user_id')
 
         # Get user's tracked ships
-        user_tracked_ships = AISDatabase.get_user_tracked_ships(user_id)
+        user_tracked_ships = TrackingService.get_user_tracked_ships(user_id)
 
         # Get tracking limits
         from models import User
