@@ -411,7 +411,15 @@ class AISDatabase:
                 return []
 
             company_users = getattr(company, 'company_users', [])
-            user_ids = [company.id] + [u.id for u in company_users]
+    def get_user_and_subordinates_tracked_ships(user_id):
+        """Get tracked ships for a user and their subordinate users."""
+        try:
+            user = User.query.get(user_id)
+            if not user:
+                return []
+
+            company_users = getattr(user, 'company_users', [])
+            user_ids = [user.id] + [u.id for u in company_users]
             tracked = TrackedShip.query.filter(TrackedShip.added_by_user_id.in_(user_ids)).join(Ship).all()
             result = []
             for t in tracked:
