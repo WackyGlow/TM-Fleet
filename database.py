@@ -134,7 +134,7 @@ class AISDatabase:
             )
 
             # Update existing position or create new
-            position = Position.query.get(mmsi)
+            position = Position.query.filter_by(mmsi=mmsi).first()
             if position:
                 position.latitude = position_data['latitude']
                 position.longitude = position_data['longitude']
