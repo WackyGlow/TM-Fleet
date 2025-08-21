@@ -71,6 +71,5 @@ class Ship(db.Model):
     def latest_position(self):
         """Return the ship's most recent position if available."""
         from .position import Position
-        """Return the ship's most recent position if available, using eager-loaded relationship."""
         # Assumes positions are ordered by timestamp descending due to relationship order_by
         return self.positions[0] if self.positions else None
