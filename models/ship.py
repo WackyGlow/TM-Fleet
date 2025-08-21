@@ -66,3 +66,8 @@ class Ship(db.Model):
         # Import here to avoid circular imports
         from .tracked_ship import TrackedShip
         return TrackedShip.query.filter_by(mmsi=self.mmsi).first() is not None
+
+    @property
+    def latest_position(self):
+        """Return the ship's most recent position if available."""
+        return self.current_position

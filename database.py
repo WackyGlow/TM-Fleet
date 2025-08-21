@@ -1,4 +1,4 @@
-from models import db, Ship, Position, TrackedShip
+from models import db, Ship, Position, TrackedShip, User
 from datetime import datetime, timedelta, UTC
 
 
@@ -115,7 +115,7 @@ class AISDatabase:
 
     @staticmethod
     def save_position(mmsi, position_data):
-        """Save ship position data."""
+        """Save or update ship position data."""
         try:
             # Ensure ship exists
             ship = Ship.query.get(mmsi)
@@ -126,23 +126,42 @@ class AISDatabase:
             # Update ship's last seen
             ship.last_seen = datetime.now(UTC)
 
-            # Create position record
-            position = Position(
-                mmsi=mmsi,
-                latitude=position_data['latitude'],
-                longitude=position_data['longitude'],
-                course=position_data.get('course'),
-                speed=position_data.get('speed'),
-                heading=position_data.get('heading'),
-                nav_status=position_data.get('nav_status'),
-                turn_rate=position_data.get('turn_rate'),
-                position_accuracy=position_data.get('position_accuracy'),
-                timestamp=position_data['timestamp'] if isinstance(position_data['timestamp'], datetime)
-                else datetime.fromisoformat(position_data['timestamp'].replace('Z', '+00:00')),
-                message_type=position_data['msg_type']
+            # Parse timestamp
+            timestamp = (
+                position_data['timestamp']
+                if isinstance(position_data['timestamp'], datetime)
+                else datetime.fromisoformat(position_data['timestamp'].replace('Z', '+00:00'))
             )
 
-            db.session.add(position)
+            # Update existing position or create new
+            position = Position.query.get(mmsi)
+            if position:
+                position.latitude = position_data['latitude']
+                position.longitude = position_data['longitude']
+                position.course = position_data.get('course')
+                position.speed = position_data.get('speed')
+                position.heading = position_data.get('heading')
+                position.nav_status = position_data.get('nav_status')
+                position.turn_rate = position_data.get('turn_rate')
+                position.position_accuracy = position_data.get('position_accuracy')
+                position.timestamp = timestamp
+                position.message_type = position_data['msg_type']
+            else:
+                position = Position(
+                    mmsi=mmsi,
+                    latitude=position_data['latitude'],
+                    longitude=position_data['longitude'],
+                    course=position_data.get('course'),
+                    speed=position_data.get('speed'),
+                    heading=position_data.get('heading'),
+                    nav_status=position_data.get('nav_status'),
+                    turn_rate=position_data.get('turn_rate'),
+                    position_accuracy=position_data.get('position_accuracy'),
+                    timestamp=timestamp,
+                    message_type=position_data['msg_type']
+                )
+                db.session.add(position)
+
             db.session.commit()
             return True
 
@@ -266,6 +285,9 @@ class AISDatabase:
                             'heading': latest_pos.heading,
                             'nav_status': latest_pos.nav_status
                         })
+                    tracked_dict['is_active'] = tracked.ship.is_active()
+                else:
+                    tracked_dict['is_active'] = False
                 result.append(tracked_dict)
 
             return result
@@ -274,7 +296,7 @@ class AISDatabase:
             return []
 
     @staticmethod
-    def add_tracked_ship(mmsi, name=None, notes=None, added_by=None, user_id=None):
+    def add_tracked_ship(mmsi, name=None, notes=None, added_by=None, added_by_user_id=None):
         """Add a ship to the tracking list with user and audit logging."""
         try:
             # Check if already tracked
@@ -294,12 +316,9 @@ class AISDatabase:
                 name=name or (ship.ship_name if ship.ship_name else None),
                 notes=notes,
                 added_by=added_by,
-                added_date=datetime.now(UTC)
+                added_date=datetime.now(UTC),
+                added_by_user=added_by_user_id
             )
-
-            # Add user_id if User model has the field
-            if hasattr(TrackedShip, 'added_by_user_id') and user_id:
-                tracked_ship.added_by_user_id = user_id
 
             db.session.add(tracked_ship)
             db.session.commit()
@@ -312,7 +331,7 @@ class AISDatabase:
             return {'success': False, 'message': f'Error adding ship: {str(e)}'}
 
     @staticmethod
-    def remove_tracked_ship(mmsi, user_id=None):
+    def remove_tracked_ship(mmsi, removed_by_user_id=None):
         """Remove a ship from the tracking list with user and audit logging."""
         try:
             tracked_ship = TrackedShip.query.filter_by(mmsi=mmsi).first()
@@ -331,7 +350,7 @@ class AISDatabase:
             return {'success': False, 'message': f'Error removing ship: {str(e)}'}
 
     @staticmethod
-    def update_tracked_ship(mmsi, name=None, notes=None, user_id=None):
+    def update_tracked_ship(mmsi, name=None, notes=None, updated_by_user_id=None):
         """Update tracked ship information with user and audit logging."""
         try:
             tracked_ship = TrackedShip.query.filter_by(mmsi=mmsi).first()
@@ -354,6 +373,91 @@ class AISDatabase:
             print(f"❌ Error updating tracked ship {mmsi}: {e}")
             db.session.rollback()
             return {'success': False, 'message': f'Error updating ship: {str(e)}'}
+
+    @staticmethod
+    def get_user_tracked_ships(user_id):
+        """Get tracked ships added by a specific user."""
+        try:
+            tracked = TrackedShip.query.filter_by(added_by_user=user_id).join(Ship).all()
+            result = []
+            for t in tracked:
+                t_dict = t.to_dict()
+                if t.ship:
+                    latest_pos = t.ship.latest_position
+                    if latest_pos:
+                        t_dict['ship_data'].update({
+                            'latitude': latest_pos.latitude,
+                            'longitude': latest_pos.longitude,
+                            'course': latest_pos.course,
+                            'speed': latest_pos.speed,
+                            'heading': latest_pos.heading,
+                            'nav_status': latest_pos.nav_status
+                        })
+                    t_dict['is_active'] = t.ship.is_active()
+                else:
+                    t_dict['is_active'] = False
+                result.append(t_dict)
+            return result
+        except Exception as e:
+            print(f"❌ Error getting user tracked ships: {e}")
+            return []
+
+    @staticmethod
+    def get_company_tracked_ships(company_id):
+        """Get tracked ships for a company and its users."""
+        try:
+            company = User.query.get(company_id)
+            if not company:
+                return []
+
+            user_ids = [company.id] + [u.id for u in company.company_users]
+            tracked = TrackedShip.query.filter(TrackedShip.added_by_user.in_(user_ids)).join(Ship).all()
+            result = []
+            for t in tracked:
+                t_dict = t.to_dict()
+                if t.ship:
+                    latest_pos = t.ship.latest_position
+                    if latest_pos:
+                        t_dict['ship_data'].update({
+                            'latitude': latest_pos.latitude,
+                            'longitude': latest_pos.longitude,
+                            'course': latest_pos.course,
+                            'speed': latest_pos.speed,
+                            'heading': latest_pos.heading,
+                            'nav_status': latest_pos.nav_status
+                        })
+                    t_dict['is_active'] = t.ship.is_active()
+                else:
+                    t_dict['is_active'] = False
+                result.append(t_dict)
+            return result
+        except Exception as e:
+            print(f"❌ Error getting company tracked ships: {e}")
+            return []
+
+    @staticmethod
+    def get_company_user_count(company_id):
+        """Get number of users belonging to a company."""
+        try:
+            return User.query.filter_by(company_id=company_id).count()
+        except Exception as e:
+            print(f"❌ Error getting company user count: {e}")
+            return 0
+
+    @staticmethod
+    def get_user_assigned_ships(user_id):
+        """Get ships assigned to a company user."""
+        try:
+            user = User.query.get(user_id)
+            if not user:
+                return []
+
+            if user.company_id:
+                return AISDatabase.get_company_tracked_ships(user.company_id)
+            return AISDatabase.get_user_tracked_ships(user_id)
+        except Exception as e:
+            print(f"❌ Error getting user assigned ships: {e}")
+            return []
 
     @staticmethod
     def get_tracked_mmsis():
