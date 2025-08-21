@@ -1,7 +1,6 @@
 from models import db, Ship, Position, TrackedShip
 from datetime import datetime, timedelta, UTC
 
-
 class AISDatabase:
     """Database service layer for AIS operations."""
 
@@ -388,3 +387,134 @@ class AISDatabase:
         except Exception as e:
             print(f"❌ Error searching ships: {e}")
             return []
+
+    @staticmethod
+    def get_company_tracked_ships(company_user_id):
+        """Get all ships tracked by a company and its users"""
+        try:
+            from models import User, TrackedShip, Position
+
+            # Get company and all its users
+            company = User.query.get(company_user_id)
+            if not company or company.role != 'company':
+                return []
+
+            # Get all users under this company (including the company itself)
+            company_user_ids = [company_user_id]
+            company_users = User.query.filter_by(company_id=company_user_id).all()
+            company_user_ids.extend([u.id for u in company_users])
+
+            # Get tracked ships from all company users
+            tracked_ships = db.session.query(TrackedShip, Position).join(
+                Position, TrackedShip.mmsi == Position.mmsi, isouter=True
+            ).filter(TrackedShip.added_by_user.in_(company_user_ids)).all()
+
+            result = []
+            for tracked, current_pos in tracked_ships:
+                tracked_dict = tracked.to_dict()
+                if current_pos:
+                    tracked_dict['ship_data'].update({
+                        'latitude': current_pos.latitude,
+                        'longitude': current_pos.longitude,
+                        'is_active': True
+                    })
+                result.append(tracked_dict)
+
+            return result
+        except Exception as e:
+            print(f"❌ Error getting company tracked ships: {e}")
+            return []
+
+    @staticmethod
+    def get_company_user_count(company_user_id):
+        """Get count of users under a company"""
+        try:
+            from models import User
+            return User.query.filter_by(company_id=company_user_id, is_active=True).count()
+        except Exception as e:
+            print(f"❌ Error getting company user count: {e}")
+            return 0
+
+    @staticmethod
+    def get_user_assigned_ships(user_id):
+        """Get ships assigned to a specific company user"""
+        try:
+            from models import User, TrackedShip, Position
+
+            user = User.query.get(user_id)
+            if not user or user.role != 'company_user':
+                return []
+
+            # Get tracked ships for this specific user
+            tracked_ships = db.session.query(TrackedShip, Position).join(
+                Position, TrackedShip.mmsi == Position.mmsi, isouter=True
+            ).filter(TrackedShip.added_by_user == user_id).all()
+
+            result = []
+            for tracked, current_pos in tracked_ships:
+                tracked_dict = tracked.to_dict()
+                if current_pos:
+                    tracked_dict['ship_data'].update({
+                        'latitude': current_pos.latitude,
+                        'longitude': current_pos.longitude,
+                        'is_active': True
+                    })
+                result.append(tracked_dict)
+
+            return result
+        except Exception as e:
+            print(f"❌ Error getting user assigned ships: {e}")
+            return []
+
+    @staticmethod
+    def get_user_tracked_ships(user_id):
+        """Get ships tracked by a free user (limited to 5)"""
+        try:
+            from models import User, TrackedShip, Position
+
+            user = User.query.get(user_id)
+            if not user or user.role != 'user':
+                return []
+
+            # Get tracked ships for this user (should be max 5)
+            tracked_ships = db.session.query(TrackedShip, Position).join(
+                Position, TrackedShip.mmsi == Position.mmsi, isouter=True
+            ).filter(TrackedShip.added_by_user == user_id).limit(5).all()
+
+            result = []
+            for tracked, current_pos in tracked_ships:
+                tracked_dict = tracked.to_dict()
+                if current_pos:
+                    tracked_dict['ship_data'].update({
+                        'latitude': current_pos.latitude,
+                        'longitude': current_pos.longitude,
+                        'is_active': True
+                    })
+                result.append(tracked_dict)
+
+            return result
+        except Exception as e:
+            print(f"❌ Error getting user tracked ships: {e}")
+            return []
+
+    @staticmethod
+    def can_user_track_ship(user_id, mmsi):
+        """Check if a user can track a specific ship based on their role and limits"""
+        try:
+            from models import User, TrackedShip
+
+            user = User.query.get(user_id)
+            if not user:
+                return False, "User not found"
+
+            # Check if ship is already tracked by this user
+            existing = TrackedShip.query.filter_by(mmsi=mmsi, added_by_user=user_id).first()
+            if existing:
+                return False, "Ship already tracked by this user"
+
+            # Use the user model's method
+            return user.can_track_ship()
+
+        except Exception as e:
+            print(f"❌ Error checking if user can track ship: {e}")
+            return False, "Error checking permissions"
