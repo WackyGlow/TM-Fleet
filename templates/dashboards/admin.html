@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard - SpyFleet</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/map.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="topbar">
+        <div class="company">Tee Marine</div>
+        <div class="nav-links">
+            <a href="{{ url_for('map_view') }}">Map View</a>
+            <a href="{{ url_for('admin_dashboard') }}" class="active">Dashboard</a>
+            <a href="#" onclick="showUserManagement()">Users</a>
+            <a href="#" onclick="showSystemStats()">System</a>
+            <div class="user-menu">
+                <span>{{ current_user_full_name }} ({{ get_user_role_name() }})</span>
+                <a href="{{ url_for('auth.profile') }}">Profile</a>
+                <a href="{{ url_for('auth.logout') }}">Logout</a>
+            </div>
+        </div>
+        <div class="project">SpyFleet Admin</div>
+    </div>
+
+    <div class="dashboard-container">
+        <!-- Admin Header -->
+        <div class="dashboard-header">
+            <h1>🛡️ Administrator Dashboard</h1>
+            <p>System overview and management controls</p>
+        </div>
+
+        <!-- System Stats -->
+        <div class="stats-grid">
+            <div class="stat-card primary">
+                <div class="stat-icon">🚢</div>
+                <div class="stat-content">
+                    <div class="stat-number">{{ stats.total_ships or 0 }}</div>
+                    <div class="stat-label">Total Ships</div>
+                </div>
+            </div>
+
+            <div class="stat-card success">
+                <div class="stat-icon">📍</div>
+                <div class="stat-content">
+                    <div class="stat-number">{{ stats.current_positions or 0 }}</div>
+                    <div class="stat-label">Current Positions</div>
+                </div>
+            </div>
+
+            <div class="stat-card warning">
+                <div class="stat-icon">🔴</div>
+                <div class="stat-content">
+                    <div class="stat-number">{{ stats.tracked_ships or 0 }}</div>
+                    <div class="stat-label">Tracked Ships</div>
+                </div>
+            </div>
+
+            <div class="stat-card info">
+                <div class="stat-icon">👥</div>
+                <div class="stat-content">
+                    <div class="stat-number">{{ stats.total_users or 0 }}</div>
+                    <div class="stat-label">System Users</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="dashboard-section">
+            <div class="section-header">
+                <h2>⚡ Quick Actions</h2>
+            </div>
+            <div class="quick-actions">
+                <div class="action-card" onclick="showUserManagement()">
+                    <div class="action-icon">👥</div>
+                    <div class="action-title">Manage Users</div>
+                    <div class="action-desc">Create and manage system users</div>
+                </div>
+
+                <div class="action-card" onclick="showSystemStats()">
+                    <div class="action-icon">📊</div>
+                    <div class="action-title">System Stats</div>
+                    <div class="action-desc">View detailed system statistics</div>
+                </div>
+
+                <a href="{{ url_for('map_view') }}" class="action-card">
+                    <div class="action-icon">🗺️</div>
+                    <div class="action-title">Ship Map</div>
+                    <div class="action-desc">View live ship positions</div>
+                </a>
+
+                <div class="action-card warning" onclick="showCleanupTools()">
+                    <div class="action-icon">🧹</div>
+                    <div class="action-title">Cleanup Tools</div>
+                    <div class="action-desc">Database maintenance</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- System Health -->
+        <div class="dashboard-section">
+            <div class="section-header">
+                <h2>💚 System Health</h2>
+            </div>
+            <div class="health-grid">
+                <div class="health-item">
+                    <div class="health-indicator green"></div>
+                    <span>Database Online</span>
+                </div>
+                <div class="health-item">
+                    <div class="health-indicator green"></div>
+                    <span>AIS Receiver Active</span>
+                </div>
+                <div class="health-item">
+                    <div class="health-indicator {{ 'green' if stats.active_ships_last_hour > 0 else 'yellow' }}"></div>
+                    <span>Data Flow {{ 'Active' if stats.active_ships_last_hour > 0 else 'Limited' }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard/admin.js') }}"></script>
+</body>
+</html>

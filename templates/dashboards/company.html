@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Company Dashboard - SpyFleet</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/map.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="topbar">
+        <div class="company">Tee Marine</div>
+        <div class="nav-links">
+            <a href="{{ url_for('map_view') }}">Map View</a>
+            <a href="{{ url_for('company_dashboard') }}" class="active">Dashboard</a>
+            <a href="#" onclick="showFleetManagement()">Fleet</a>
+            <a href="#" onclick="showCompanyUsers()">Company Users</a>
+            <a href="#" onclick="showReports()">Reports</a>
+            <div class="user-menu">
+                <span>{{ current_user_full_name }} ({{ get_user_role_name() }})</span>
+                <a href="{{ url_for('auth.profile') }}">Profile</a>
+                <a href="{{ url_for('auth.logout') }}">Logout</a>
+            </div>
+        </div>
+        <div class="project">SpyFleet Company</div>
+    </div>
+
+    <div class="dashboard-container">
+        <!-- Company Header -->
+        <div class="dashboard-header">
+            <h1>🏢 Company Dashboard</h1>
+            <p>Fleet management and company operations</p>
+        </div>
+
+        <!-- Company Stats -->
+        <div class="stats-grid">
+            <div class="stat-card primary">
+                <div class="stat-icon">🚢</div>
+                <div class="stat-content">
+                    <div class="stat-number">{{ stats.tracked_ships or 0 }}</div>
+                    <div class="stat-label">Tracked Ships</div>
+                </div>
+            </div>
+
+            <div class="stat-card success">
+                <div class="stat-icon">⚡</div>
+                <div class="stat-content">
+                    <div class="stat-number">{{ stats.active_ships or 0 }}</div>
+                    <div class="stat-label">Active Ships</div>
+                </div>
+            </div>
+
+            <div class="stat-card info">
+                <div class="stat-icon">👥</div>
+                <div class="stat-content">
+                    <div class="stat-number">{{ stats.company_users or 0 }}</div>
+                    <div class="stat-label">Company Users</div>
+                </div>
+            </div>
+
+            <div class="stat-card unlimited">
+                <div class="stat-icon">∞</div>
+                <div class="stat-content">
+                    <div class="stat-number">Unlimited</div>
+                    <div class="stat-label">Tracking Limit</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="dashboard-section">
+            <div class="section-header">
+                <h2>⚡ Quick Actions</h2>
+            </div>
+            <div class="quick-actions">
+                <a href="{{ url_for('map_view') }}" class="action-card">
+                    <div class="action-icon">🗺️</div>
+                    <div class="action-title">Live Map</div>
+                    <div class="action-desc">View ship positions</div>
+                </a>
+
+                <div class="action-card" onclick="showTrackShip()">
+                    <div class="action-icon">🎯</div>
+                    <div class="action-title">Track Ship</div>
+                    <div class="action-desc">Add new ship to fleet</div>
+                </div>
+
+                <div class="action-card" onclick="showCompanyUsers()">
+                    <div class="action-icon">👤➕</div>
+                    <div class="action-title">Add User</div>
+                    <div class="action-desc">Create company user</div>
+                </div>
+
+                <div class="action-card" onclick="showReports()">
+                    <div class="action-icon">📊</div>
+                    <div class="action-title">Fleet Reports</div>
+                    <div class="action-desc">Generate reports</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tracked Ships -->
+        <div class="dashboard-section">
+            <div class="section-header">
+                <h2>🚢 Company Fleet</h2>
+                <button class="btn-primary" onclick="showTrackShip()">Track New Ship</button>
+            </div>
+
+            {% if tracked_ships %}
+            <div class="ships-grid">
+                {% for ship in tracked_ships %}
+                <div class="ship-card">
+                    <div class="ship-header">
+                        <div class="ship-name">{{ ship.name or ship.ship_data.ship_name or 'Unknown Vessel' }}</div>
+                        <div class="ship-status {{ 'active' if ship.ship_data.get('is_active') else 'inactive' }}">
+                            {{ '● Active' if ship.ship_data.get('is_active') else '○ Inactive' }}
+                        </div>
+                    </div>
+                    <div class="ship-details">
+                        <div class="ship-detail">
+                            <span class="detail-label">MMSI:</span>
+                            <span class="detail-value">{{ ship.mmsi }}</span>
+                        </div>
+                        {% if ship.ship_data.get('latitude') and ship.ship_data.get('longitude') %}
+                        <div class="ship-detail">
+                            <span class="detail-label">Position:</span>
+                            <span class="detail-value">{{ "%.4f, %.4f"|format(ship.ship_data.latitude, ship.ship_data.longitude) }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="ship-detail">
+                            <span class="detail-label">Added by:</span>
+                            <span class="detail-value">{{ ship.added_by_user or 'System' }}</span>
+                        </div>
+                    </div>
+                    <div class="ship-actions">
+                        <button onclick="viewShipOnMap('{{ ship.mmsi }}')" class="btn-small">View</button>
+                        <button onclick="editShip('{{ ship.mmsi }}')" class="btn-small secondary">Edit</button>
+                        <button onclick="removeShip('{{ ship.mmsi }}')" class="btn-small danger">Remove</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="no-ships">
+                <p>No ships currently tracked.</p>
+                <button onclick="showTrackShip()" class="btn-primary">Track Your First Ship</button>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/dashboard/company.js') }}"></script>
+</body>
+</html>

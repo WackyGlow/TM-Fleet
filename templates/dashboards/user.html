@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User Dashboard - SpyFleet</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/map.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/dashboard.css') }}">
+</head>
+<body>
+    <!-- Top Bar -->
+    <div class="topbar">
+        <div class="company">Tee Marine</div>
+        <div class="nav-links">
+            <a href="{{ url_for('map_view') }}">Map View</a>
+            <a href="{{ url_for('user_dashboard') }}" class="active">Dashboard</a>
+            <a href="#" onclick="showUpgrade()">Upgrade</a>
+            <div class="user-menu">
+                <span>{{ current_user_full_name }} ({{ get_user_role_name() }})</span>
+                <a href="{{ url_for('auth.profile') }}">Profile</a>
+                <a href="{{ url_for('auth.logout') }}">Logout</a>
+            </div>
+        </div>
+        <div class="project">SpyFleet Free</div>
+    </div>
+
+    <div class="dashboard-container">
+        <!-- User Header -->
+        <div class="dashboard-header">
+            <h1>🆓 Free User Dashboard</h1>
+            <p>Track up to 5 ships with your free account</p>
+        </div>
+
+        <!-- User Stats -->
+        <div class="stats-grid">
+            <div class="stat-card primary">
+                <div class="stat-icon">🚢</div>
+                <div class="stat-content">
+                    <div class="stat-number">{{ stats.tracked_ships or 0 }}/{{ stats.tracking_limit or 5 }}</div>
+                    <div class="stat-label">Tracked Ships</div>
+                </div>
+            </div>
+
+            <div class="stat-card {{ 'success' if stats.remaining_slots > 0 else 'warning' }}">
+                <div class="stat-icon">{{ '✅' if stats.remaining_slots > 0 else '⚠️' }}</div>
+                <div class="stat-content">
+                    <div class="stat-number">{{ stats.remaining_slots or 0 }}</div>
+                    <div class="stat-label">Remaining Slots</div>
+                </div>
+            </div>
+
+            <div class="stat-card info">
+                <div class="stat-icon">🆓</div>
+                <div class="stat-content">
+                    <div class="stat-number">Free</div>
+                    <div class="stat-label">Account Type</div>
+                </div>
+            </div>
+
+            <div class="stat-card upgrade">
+                <div class="stat-icon">⬆️</div>
+                <div class="stat-content">
+                    <div class="stat-number">Upgrade</div>
+                    <div class="stat-label">For Unlimited</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tracking Limit Notice -->
+        {% if stats.remaining_slots == 0 %}
+        <div class="limit-notice warning">
+            <div class="notice-icon">⚠️</div>
+            <div class="notice-content">
+                <h3>Tracking Limit Reached</h3>
+                <p>You've reached your limit of 5 tracked ships. Remove a ship or upgrade to track more.</p>
+                <button onclick="showUpgrade()" class="btn-primary">Upgrade Account</button>
+            </div>
+        </div>
+        {% elif stats.remaining_slots <= 2 %}
+        <div class="limit-notice info">
+            <div class="notice-icon">ℹ️</div>
+            <div class="notice-content">
+                <h3>Almost at Limit</h3>
+                <p>You have {{ stats.remaining_slots }} tracking slot{{ 's' if stats.remaining_slots != 1 else '' }} remaining.</p>
+                <button onclick="showUpgrade()" class="btn-secondary">Consider Upgrading</button>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Quick Actions -->
+        <div class="dashboard-section">
+            <div class="section-header">
+                <h2>⚡ Quick Actions</h2>
+            </div>
+            <div class="quick-actions">
+                <a href="{{ url_for('map_view') }}" class="action-card">
+                    <div class="action-icon">🗺️</div>
+                    <div class="action-title">Live Map</div>
+                    <div class="action-desc">View ship positions</div>
+                </a>
+
+                <div class="action-card {{ 'disabled' if not stats.can_track_more else '' }}" onclick="trackNewShip()">
+                    <div class="action-icon">{{ '🎯' if stats.can_track_more else '🚫' }}</div>
+                    <div class="action-title">Track Ship</div>
+                    <div class="action-desc">{{ 'Add new ship' if stats.can_track_more else 'Limit reached' }}</div>
+                </div>
+
+                <div class="action-card" onclick="showUpgrade()">
+                    <div class="action-icon">⭐</div>
+                    <div class="action-title">Upgrade</div>
+                    <div class="action-desc">Get unlimited tracking</div>
+                </div>
+
+                <div class="action-card" onclick="showHelp()">
+                    <div class="action-icon">❓</div>
+                    <div class="action-title">Help</div>
+                    <div class="action-desc">Learn about features</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tracked Ships -->
+        <div class="dashboard-section">
+            <div class="section-header">
+                <h2>🚢 Your Tracked Ships ({{ stats.tracked_ships or 0 }}/5)</h2>
+                {% if stats.can_track_more %}
+                <button class="btn-primary" onclick="trackNewShip()">Track New Ship</button>
+                {% else %}
+                <button class="btn-disabled" disabled>Limit Reached</button>
+                {% endif %}
+            </div>
+
+            {% if tracked_ships %}
+            <div class="ships-grid">
+                {% for ship in tracked_ships %}
+                <div class="ship-card {{ 'active' if ship.ship_data.get('is_active') else 'inactive' }}">
+                    <div class="ship-header">
+                        <div class="ship-name">{{ ship.name or ship.ship_data.ship_name or 'Unknown Vessel' }}</div>
+                        <div class="ship-status {{ 'active' if ship.ship_data.get('is_active') else 'inactive' }}">
+                            {{ '● Active' if ship.ship_data.get('is_active') else '○ Inactive' }}
+                        </div>
+                    </div>
+                    <div class="ship-details">
+                        <div class="ship-detail">
+                            <span class="detail-label">MMSI:</span>
+                            <span class="detail-value">{{ ship.mmsi }}</span>
+                        </div>
+                        {% if ship.ship_data.get('latitude') and ship.ship_data.get('longitude') %}
+                        <div class="ship-detail">
+                            <span class="detail-label">Position:</span>
+                            <span class="detail-value">{{ "%.4f, %.4f"|format(ship.ship_data.latitude, ship.ship_data.longitude) }}</span>
+                        </div>
+                        {% endif %}
+                        {% if ship.notes %}
+                        <div class="ship-detail">
+                            <span class="detail-label">Notes:</span>
+                            <span class="detail-value">{{ ship.notes[:50] }}{{ '...' if ship.notes|length > 50 else '' }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="ship-detail">
+                            <span class="detail-label">Added:</span>
+                            <span class="detail-value">{{ ship.added_date[:10] if ship.added_date else 'Unknown' }}</span>
+                        </div>
+                    </div>
+                    <div class="ship-actions">
+                        <button onclick="viewShipOnMap('{{ ship.mmsi }}')" class="btn-small">View</button>
+                        <button onclick="editShip('{{ ship.mmsi }}')" class="btn-small secondary">Edit</button>
+                        <button onclick="removeShip('{{ ship.mmsi }}')" class="btn-small danger">Remove</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="no-ships">
+                <div class="no-ships-icon">🚢</div>
+                <h3>No Ships Tracked Yet</h3>
+                <p>Start tracking ships to monitor their positions and activities.</p>
+                <p>Free accounts can track up to <strong>5 ships</strong>.</p>
+                <button onclick="trackNewShip()" class="btn-primary">Track Your First Ship</button>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- Upgrade Promotion -->
+        <div class="dashboard-section">
+            <div class="upgrade-section">
+                <div class="upgrade-content">
+                    <h3>🚀 Ready for More?</h3>
+                    <p>Upgrade to a Company account for unlimited ship tracking and advanced features:</p>
+                    <ul class="upgrade-features">
+                        <li>✅ Unlimited ship tracking</li>
+                        <li>✅ Advanced fleet management</li>
+                        <li>✅ Company user management</li>
+                        <li>✅ Priority support</li>
+                    </ul>
+                    <button onclick="showUpgrade()" class="btn-upgrade">Upgrade Now</button>
+                </div>
+                <div class="upgrade-visual">
+                    <div class="upgrade-chart">
+                        <div class="chart-bar free" style="height: 20%;">
+                            <span>Free<br>5 ships</span>
+                        </div>
+                        <div class="chart-bar company" style="height: 100%;">
+                            <span>Company<br>Unlimited</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Template-specific data for user dashboard
+        window.canTrackMore = {{ 'true' if stats.can_track_more else 'false' }};
+    </script>
+    <script src="{{ url_for('static', filename='js/dashboard/user.js') }}"></script>
+</body>
+</html>
