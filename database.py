@@ -410,7 +410,42 @@ class AISDatabase:
             if not company:
                 return []
 
+            # Collect IDs of the company and all associated users
             company_users = getattr(company, 'company_users', [])
+            user_ids = [company.id] + [u.id for u in company_users]
+
+            # Query all tracked ships added by the company or its users
+            tracked = (
+                TrackedShip.query
+                .filter(TrackedShip.added_by_user_id.in_(user_ids))
+                .join(Ship)
+                .all()
+            )
+
+            result = []
+            for t in tracked:
+                t_dict = t.to_dict()
+                if t.ship:
+                    latest_pos = t.ship.latest_position
+                    if latest_pos:
+                        t_dict['ship_data'].update({
+                            'latitude': latest_pos.latitude,
+                            'longitude': latest_pos.longitude,
+                            'course': latest_pos.course,
+                            'speed': latest_pos.speed,
+                            'heading': latest_pos.heading,
+                            'nav_status': latest_pos.nav_status
+                        })
+                    t_dict['is_active'] = t.ship.is_active()
+                else:
+                    t_dict['is_active'] = False
+                result.append(t_dict)
+
+            return result
+        except Exception as e:
+            print(f"❌ Error getting company tracked ships: {e}")
+            return []
+
     @staticmethod
     def get_user_and_subordinates_tracked_ships(user_id):
         """Get tracked ships for a user and their subordinate users."""
