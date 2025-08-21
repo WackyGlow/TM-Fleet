@@ -317,7 +317,7 @@ class AISDatabase:
                 notes=notes,
                 added_by=added_by,
                 added_date=datetime.now(UTC),
-                added_by_user=added_by_user_id
+                added_by_user_id=added_by_user_id
             )
 
             db.session.add(tracked_ship)
@@ -378,7 +378,7 @@ class AISDatabase:
     def get_user_tracked_ships(user_id):
         """Get tracked ships added by a specific user."""
         try:
-            tracked = TrackedShip.query.filter_by(added_by_user=user_id).join(Ship).all()
+            tracked = TrackedShip.query.filter_by(added_by_user_id=user_id).join(Ship).all()
             result = []
             for t in tracked:
                 t_dict = t.to_dict()
@@ -410,8 +410,9 @@ class AISDatabase:
             if not company:
                 return []
 
-            user_ids = [company.id] + [u.id for u in company.company_users]
-            tracked = TrackedShip.query.filter(TrackedShip.added_by_user.in_(user_ids)).join(Ship).all()
+            company_users = getattr(company, 'company_users', [])
+            user_ids = [company.id] + [u.id for u in company_users]
+            tracked = TrackedShip.query.filter(TrackedShip.added_by_user_id.in_(user_ids)).join(Ship).all()
             result = []
             for t in tracked:
                 t_dict = t.to_dict()

@@ -70,4 +70,5 @@ class Ship(db.Model):
     @property
     def latest_position(self):
         """Return the ship's most recent position if available."""
-        return self.current_position
+        from .position import Position
+        return Position.query.filter_by(mmsi=self.mmsi).order_by(Position.timestamp.desc()).first()

@@ -11,7 +11,7 @@ class TrackedShip(db.Model):
     name = db.Column(db.String(100))  # Custom name/alias for the tracked ship
     notes = db.Column(db.Text)  # Optional notes about why this ship is tracked
     added_date = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
-    added_by_user = db.Column(db.Integer, db.ForeignKey('users.id'))  # Link to user
+    added_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))  # Link to user
     added_by = db.Column(db.String(100))  # Legacy field for backward compatibility
 
     # Relationships
@@ -31,6 +31,7 @@ class TrackedShip(db.Model):
             'notes': self.notes,
             'added_date': self.added_date.isoformat(),
             'added_by': self.added_by,
+            'added_by_user_id': self.added_by_user_id,
             'added_by_user': self.user.full_name if self.user else None,
             'ship_data': ship_data
         }
