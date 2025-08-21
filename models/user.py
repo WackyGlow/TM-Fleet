@@ -1,80 +1,83 @@
 from datetime import datetime, timezone
-
-# Import db from the main models package
 from . import db
+from sqlalchemy import Index
 
 
 class User(db.Model):
-    """User authentication model"""
+    """User model with company association and role-based access."""
     __tablename__ = 'users'
 
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     email = db.Column(db.String(120), unique=True, nullable=False)
-    full_name = db.Column(db.String(200), nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False, default='user')  # admin, company, company_user, user
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    # User profile
+    first_name = db.Column(db.String(50))
+    last_name = db.Column(db.String(50))
+    phone = db.Column(db.String(20))
+
+    # Company association
+    company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
+
+    # Role and permissions
+    role = db.Column(db.String(20), default='viewer', nullable=False)  # viewer, operator, admin, super_admin
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+
+    # Timestamps
+    created_date = db.Column(db.DateTime, default=datetime.now(timezone.utc), nullable=False)
     last_login = db.Column(db.DateTime)
-    created_by = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
-    # Company relationships
-    company_id = db.Column(db.Integer, db.ForeignKey('users.id'))  # Points to company user
-    company_name = db.Column(db.String(200))  # For company role users
+    # Relationships
+    tracked_ships_added = db.relationship('TrackedShip', foreign_keys='TrackedShip.added_by_user_id',
+                                          backref='added_by_user', lazy='dynamic')
+    audit_logs = db.relationship('AuditLog', backref='user', lazy='dynamic', cascade='all, delete-orphan')
+    created_by = db.relationship('User', remote_side=[id], backref='created_users')
 
-    # Self-referential relationships
-    company_users = db.relationship('User',
-                                    foreign_keys=[company_id],
-                                    backref=db.backref('company', remote_side=[id]),
-                                    cascade='all, delete-orphan')
+    # Indexes for performance
+    __table_args__ = (
+        Index('idx_users_company_active', 'company_id', 'is_active'),
+        Index('idx_users_username', 'username'),
+        Index('idx_users_email', 'email'),
+    )
 
     def __repr__(self):
-        return f'<User {self.username}: {self.full_name}>'
+        return f'<User {self.username} ({self.company.name if self.company else "No Company"})>'
 
     def to_dict(self):
+        """Convert user to dictionary."""
         return {
             'id': self.id,
             'username': self.username,
             'email': self.email,
-            'full_name': self.full_name,
+            'first_name': self.first_name,
+            'last_name': self.last_name,
+            'phone': self.phone,
+            'company_id': self.company_id,
+            'company_name': self.company.name if self.company else None,
             'role': self.role,
             'is_active': self.is_active,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'created_date': self.created_date.isoformat() if self.created_date else None,
             'last_login': self.last_login.isoformat() if self.last_login else None,
-            'company_id': self.company_id,
-            'company_name': self.company_name
+            'created_by_username': self.created_by.username if self.created_by else None
         }
 
-    def get_tracking_limit(self):
-        """Get the tracking limit based on user role"""
-        if self.role == 'user':
-            return 5  # Free users get 5 ships
-        elif self.role in ['company', 'company_user']:
-            return None  # Unlimited for company users
-        elif self.role == 'admin':
-            return None  # Unlimited for admin
-        return 0
+    @property
+    def full_name(self):
+        """Get user's full name."""
+        if self.first_name and self.last_name:
+            return f"{self.first_name} {self.last_name}"
+        elif self.first_name:
+            return self.first_name
+        elif self.last_name:
+            return self.last_name
+        else:
+            return self.username
 
-    def can_track_ship(self):
-        """Check if user can track more ships based on role and limits"""
-        from .tracked_ship import TrackedShip
-
-        if self.role == 'admin':
-            return True, "Admin has unlimited access"
-
-        if self.role == 'company':
-            return True, "Company has unlimited tracking"
-
-        if self.role == 'company_user':
-            # Company users can track ships assigned to their company
-            return True, "Company user access"
-
-        if self.role == 'user':
-            # Check current tracking count
-            current_count = TrackedShip.query.filter_by(added_by_user=self.id).count()
-            if current_count >= 5:
-                return False, "Free users limited to 5 tracked ships"
-            return True, f"Can track {5 - current_count} more ships"
-
-        return False, "No tracking permission"
+    def has_permission(self, required_role):
+        """Check if user has required role permission."""
+        role_hierarchy = {'viewer': 1, 'operator': 2, 'admin': 3, 'super_admin': 4}
+        user_level = role_hierarchy.get(self.role, 0)
+        required_level = role_hierarchy.get(required_role, 4)
+        return user_level >= required_level

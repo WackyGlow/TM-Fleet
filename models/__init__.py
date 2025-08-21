@@ -8,6 +8,7 @@ from .user import User
 from .ship import Ship
 from .position import Position
 from .tracked_ship import TrackedShip
+from .company import Company
 
 # Make everything available at package level
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     'User',
     'Ship',
     'Position',
-    'TrackedShip'
+    'TrackedShip',
+    'company'
 ]
