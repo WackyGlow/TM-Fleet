@@ -178,7 +178,7 @@ def register_api_routes(app):
         if user_role != 'admin':
             from models import TrackedShip
             tracked_ship = TrackedShip.query.filter_by(mmsi=mmsi).first()
-            if tracked_ship and tracked_ship.added_by_user != user_id:
+            if tracked_ship and tracked_ship.added_by_user_id != user_id:
                 return jsonify({"success": False, "message": "You can only remove ships you added"}), 403
 
         result = AISDatabase.remove_tracked_ship(mmsi, removed_by_user_id=user_id)
@@ -205,7 +205,7 @@ def register_api_routes(app):
         if user_role != 'admin':
             from models import TrackedShip
             tracked_ship = TrackedShip.query.filter_by(mmsi=mmsi).first()
-            if tracked_ship and tracked_ship.added_by_user != user_id:
+            if tracked_ship and tracked_ship.added_by_user_id != user_id:
                 return jsonify({"success": False, "message": "You can only edit ships you added"}), 403
 
         name = data.get('name', '').strip() or None
@@ -233,7 +233,7 @@ def register_api_routes(app):
 
         # Check if ship is currently tracked by this user
         from models import TrackedShip
-        existing_track = TrackedShip.query.filter_by(mmsi=mmsi, added_by_user=user_id).first()
+        existing_track = TrackedShip.query.filter_by(mmsi=mmsi, added_by_user_id=user_id).first()
 
         if existing_track:
             # Remove from tracking
@@ -273,7 +273,7 @@ def register_api_routes(app):
         if not user:
             return jsonify({"success": False, "message": "User not found"}), 400
 
-        current_count = TrackedShip.query.filter_by(added_by_user=user_id).count()
+        current_count = TrackedShip.query.filter_by(added_by_user_id=user_id).count()
         can_track, message = user.can_track_ship()
         limit = user.get_tracking_limit()
 

@@ -72,7 +72,7 @@ class User(db.Model):
 
         if self.role == 'user':
             # Check current tracking count
-            current_count = TrackedShip.query.filter_by(added_by_user=self.id).count()
+            current_count = TrackedShip.query.filter_by(added_by_user_id=self.id).count()
             if current_count >= 5:
                 return False, "Free users limited to 5 tracked ships"
             return True, f"Can track {5 - current_count} more ships"
