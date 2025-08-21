@@ -1,5 +1,3 @@
-import os
-import socket
 import threading
 import time
 from flask import Flask
@@ -7,9 +5,15 @@ from flask import Flask
 # Import configuration and services
 from config import Config
 from services.ais_service import AISService
-from routes import register_routes
-from models import db
 from database import AISDatabase
+from models import db
+
+# Import authentication
+from auth import auth_bp
+
+# Import your existing routes and dashboards
+from routes import register_routes
+from dashboards import register_dashboard_routes
 
 
 def create_app():
@@ -23,15 +27,21 @@ def create_app():
     db.init_app(app)
     AISDatabase.init_database(app)
 
-    # Register routes
+    # Register authentication blueprint
+    app.register_blueprint(auth_bp)
+
+    # Register your existing routes
     register_routes(app)
+
+    # Register dashboard routes
+    register_dashboard_routes(app)
 
     return app
 
 
 def main():
     """Main application entry point."""
-    print("🎯 MAIN: Starting SpyFleet AIS tracking application...")
+    print("🎯 MAIN: Starting SpyFleet AIS tracking application with authentication...")
 
     # Test threading
     test_threading()
@@ -87,6 +97,7 @@ def start_web_server(app):
     """Start the Flask web server."""
     print("🌐 MAIN: Starting Flask web server...")
     print(f"📡 MAIN: UDP listener active on port {app.config['AIS_UDP_PORT']}")
+    print("🔐 MAIN: Authentication system enabled")
 
     # Start Flask (disable reloader to prevent double initialization)
     app.run(
