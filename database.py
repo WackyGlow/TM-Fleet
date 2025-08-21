@@ -411,6 +411,7 @@ class AISDatabase:
                 return []
 
             company_users = getattr(company, 'company_users', [])
+    @staticmethod
     def get_user_and_subordinates_tracked_ships(user_id):
         """Get tracked ships for a user and their subordinate users."""
         try:
