@@ -274,8 +274,8 @@ class AISDatabase:
             return []
 
     @staticmethod
-    def add_tracked_ship(mmsi, name=None, notes=None, added_by=None, user_id=None):
-        """Add a ship to the tracking list with user and audit logging."""
+    def add_tracked_ship(mmsi, name=None, notes=None, added_by=None):
+        """Add a ship to the tracking list."""
         try:
             # Check if already tracked
             existing = TrackedShip.query.filter_by(mmsi=mmsi).first()
@@ -297,10 +297,6 @@ class AISDatabase:
                 added_date=datetime.now(UTC)
             )
 
-            # Add user_id if User model has the field
-            if hasattr(TrackedShip, 'added_by_user_id') and user_id:
-                tracked_ship.added_by_user_id = user_id
-
             db.session.add(tracked_ship)
             db.session.commit()
 
@@ -312,14 +308,13 @@ class AISDatabase:
             return {'success': False, 'message': f'Error adding ship: {str(e)}'}
 
     @staticmethod
-    def remove_tracked_ship(mmsi, user_id=None):
-        """Remove a ship from the tracking list with user and audit logging."""
+    def remove_tracked_ship(mmsi):
+        """Remove a ship from the tracking list."""
         try:
             tracked_ship = TrackedShip.query.filter_by(mmsi=mmsi).first()
             if not tracked_ship:
                 return {'success': False, 'message': 'Ship is not being tracked'}
 
-            ship_name = tracked_ship.name or 'Unknown'
             db.session.delete(tracked_ship)
             db.session.commit()
 
@@ -331,15 +326,12 @@ class AISDatabase:
             return {'success': False, 'message': f'Error removing ship: {str(e)}'}
 
     @staticmethod
-    def update_tracked_ship(mmsi, name=None, notes=None, user_id=None):
-        """Update tracked ship information with user and audit logging."""
+    def update_tracked_ship(mmsi, name=None, notes=None):
+        """Update tracked ship information."""
         try:
             tracked_ship = TrackedShip.query.filter_by(mmsi=mmsi).first()
             if not tracked_ship:
                 return {'success': False, 'message': 'Ship is not being tracked'}
-
-            old_name = tracked_ship.name
-            old_notes = tracked_ship.notes
 
             if name is not None:
                 tracked_ship.name = name
