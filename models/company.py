@@ -20,8 +20,8 @@ class Company(db.Model):
     timezone = db.Column(db.String(50), default='UTC')
 
     # Relationships
-    users = db.relationship('User', backref='company', lazy='dynamic', cascade='all, delete-orphan')
-    tracked_ships = db.relationship('TrackedShip', backref='company', lazy='dynamic', cascade='all, delete-orphan')
+    users = db.relationship('User', backref='company', lazy='dynamic')
+    tracked_ships = db.relationship('TrackedShip', backref='company', lazy='dynamic')
 
     def __repr__(self):
         return f'<Company {self.name}>'

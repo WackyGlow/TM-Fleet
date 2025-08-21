@@ -21,7 +21,7 @@ class User(db.Model):
     company_id = db.Column(db.Integer, db.ForeignKey('companies.id'), nullable=False)
 
     # Role and permissions
-    role = db.Column(db.String(20), default='viewer', nullable=False)  # viewer, operator, admin, super_admin
+    role = db.Column(db.String(20), default='user', nullable=False)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     # Timestamps
@@ -30,17 +30,7 @@ class User(db.Model):
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
 
     # Relationships
-    tracked_ships_added = db.relationship('TrackedShip', foreign_keys='TrackedShip.added_by_user_id',
-                                          backref='added_by_user', lazy='dynamic')
-    audit_logs = db.relationship('AuditLog', backref='user', lazy='dynamic', cascade='all, delete-orphan')
     created_by = db.relationship('User', remote_side=[id], backref='created_users')
-
-    # Indexes for performance
-    __table_args__ = (
-        Index('idx_users_company_active', 'company_id', 'is_active'),
-        Index('idx_users_username', 'username'),
-        Index('idx_users_email', 'email'),
-    )
 
     def __repr__(self):
         return f'<User {self.username} ({self.company.name if self.company else "No Company"})>'
@@ -77,7 +67,35 @@ class User(db.Model):
 
     def has_permission(self, required_role):
         """Check if user has required role permission."""
-        role_hierarchy = {'viewer': 1, 'operator': 2, 'admin': 3, 'super_admin': 4}
+        role_hierarchy = {'user': 1, 'company_user': 2, 'company': 3, 'admin': 4}
         user_level = role_hierarchy.get(self.role, 0)
         required_level = role_hierarchy.get(required_role, 4)
         return user_level >= required_level
+
+    def can_track_ship(self):
+        """Check if user can track more ships based on their role and current count."""
+        if self.role in ['admin', 'company']:
+            return True, "Unlimited tracking available"
+
+        if self.role == 'company_user':
+            return False, "Company users can only view assigned ships"
+
+        # Free users (role='user') have a limit of 5 ships
+        from .tracked_ship import TrackedShip
+        current_count = TrackedShip.query.filter_by(added_by_user_id=self.id).count()
+        limit = self.get_tracking_limit()
+
+        if current_count >= limit:
+            return False, f"You've reached your limit of {limit} tracked ships. Upgrade for unlimited tracking."
+
+        remaining = limit - current_count
+        return True, f"You can track {remaining} more ship{'s' if remaining != 1 else ''}."
+
+    def get_tracking_limit(self):
+        """Get the tracking limit for this user."""
+        if self.role in ['admin', 'company']:
+            return None  # Unlimited
+        elif self.role == 'company_user':
+            return None  # No personal tracking, only assigned ships
+        else:  # role == 'user'
+            return 5  # Free tier limit

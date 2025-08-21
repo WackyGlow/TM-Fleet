@@ -20,9 +20,6 @@ class Ship(db.Model):
     first_seen = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     last_seen = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
-    # Relationships will be defined in the related model files
-    # positions = db.relationship('Position', backref='ship', lazy='dynamic', cascade='all, delete-orphan')
-
     def __repr__(self):
         return f'<Ship {self.mmsi}: {self.ship_name or "Unknown"}>'
 
@@ -63,6 +60,12 @@ class Ship(db.Model):
     @property
     def is_tracked(self):
         """Check if this ship is being tracked."""
-        # Import here to avoid circular imports
         from .tracked_ship import TrackedShip
         return TrackedShip.query.filter_by(mmsi=self.mmsi).first() is not None
+
+    @property
+    def latest_position(self):
+        """Get the latest position for this ship."""
+        if hasattr(self, 'current_position'):
+            return self.current_position
+        return None
