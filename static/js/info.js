@@ -1,5 +1,5 @@
 // Info Page JavaScript
-// Handles statistics loading and dynamic content for the about page
+// Handles statistics loading, cleanup functionality, and dynamic content for the about page
 
 // Initialize page when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
@@ -9,8 +9,10 @@ document.addEventListener('DOMContentLoaded', function() {
 // Initialize the info page
 function initializeInfoPage() {
     loadStatistics();
+    loadCleanupStats();
     startStatisticsRefresh();
     addInteractiveEffects();
+    setupCleanupHandlers();
 }
 
 // Load system statistics
@@ -25,6 +27,131 @@ async function loadStatistics() {
     } catch (error) {
         console.error('Error loading statistics:', error);
         showFallbackStats();
+    }
+}
+
+// Load cleanup statistics
+async function loadCleanupStats() {
+    try {
+        const response = await fetch('/admin/cleanup-stats');
+        const stats = await response.json();
+
+        updateCleanupStats(stats);
+
+    } catch (error) {
+        console.error('Error loading cleanup stats:', error);
+        showCleanupError('Failed to load cleanup statistics');
+    }
+}
+
+// Update cleanup statistics in UI
+function updateCleanupStats(stats) {
+    updateElement('totalPositions', formatNumber(stats.total_positions || 0));
+    updateElement('uniqueShips', formatNumber(stats.unique_ships || 0));
+    updateElement('duplicatePositions', formatNumber(stats.duplicate_positions || 0));
+
+    // Enable/disable cleanup button based on whether cleanup is needed
+    const cleanupBtn = document.getElementById('cleanupBtn');
+    if (stats.cleanup_needed) {
+        cleanupBtn.disabled = false;
+        cleanupBtn.textContent = `🧹 Clean Up ${formatNumber(stats.duplicate_positions)} Records`;
+        showCleanupMessage(`${formatNumber(stats.duplicate_positions)} duplicate position records can be cleaned up`, 'warning');
+    } else {
+        cleanupBtn.disabled = true;
+        cleanupBtn.textContent = '✅ Database Optimized';
+        showCleanupMessage('Database is already optimized - no cleanup needed', 'success');
+    }
+}
+
+// Setup cleanup button handlers
+function setupCleanupHandlers() {
+    const refreshBtn = document.getElementById('refreshStatsBtn');
+    const cleanupBtn = document.getElementById('cleanupBtn');
+
+    refreshBtn.addEventListener('click', handleRefreshStats);
+    cleanupBtn.addEventListener('click', handleCleanup);
+}
+
+// Handle refresh stats button click
+async function handleRefreshStats() {
+    const btn = document.getElementById('refreshStatsBtn');
+    setButtonLoading(btn, true);
+
+    try {
+        await loadCleanupStats();
+        showCleanupMessage('Statistics refreshed successfully', 'success');
+    } catch (error) {
+        showCleanupError('Failed to refresh statistics');
+    } finally {
+        setButtonLoading(btn, false);
+    }
+}
+
+// Handle cleanup button click
+async function handleCleanup() {
+    // Confirm with user
+    const duplicates = document.getElementById('duplicatePositions').textContent;
+    if (!confirm(`Are you sure you want to clean up ${duplicates} duplicate position records?\n\nThis will:\n• Keep the most recent position for each ship\n• Remove all older position records\n• Free up database space\n\nThis action cannot be undone.`)) {
+        return;
+    }
+
+    const btn = document.getElementById('cleanupBtn');
+    setButtonLoading(btn, true);
+
+    try {
+        const response = await fetch('/admin/cleanup-positions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showCleanupMessage(result.message, 'success');
+            // Refresh stats to show updated numbers
+            await loadCleanupStats();
+            await loadStatistics(); // Refresh main stats too
+        } else {
+            showCleanupError(result.message);
+        }
+
+    } catch (error) {
+        showCleanupError('Failed to perform cleanup operation');
+    } finally {
+        setButtonLoading(btn, false);
+    }
+}
+
+// Show cleanup message
+function showCleanupMessage(message, type = 'success') {
+    const messageEl = document.getElementById('cleanupMessage');
+    messageEl.textContent = message;
+    messageEl.className = `cleanup-message ${type}`;
+    messageEl.style.display = 'block';
+
+    // Auto-hide after 10 seconds for success messages
+    if (type === 'success') {
+        setTimeout(() => {
+            messageEl.style.display = 'none';
+        }, 10000);
+    }
+}
+
+// Show cleanup error
+function showCleanupError(message) {
+    showCleanupMessage('❌ ' + message, 'error');
+}
+
+// Set button loading state
+function setButtonLoading(button, loading) {
+    if (loading) {
+        button.classList.add('loading');
+        button.disabled = true;
+    } else {
+        button.classList.remove('loading');
+        button.disabled = false;
     }
 }
 
@@ -102,6 +229,11 @@ function startStatisticsRefresh() {
     setInterval(() => {
         loadStatistics();
     }, 30000);
+
+    // Refresh cleanup stats every 60 seconds
+    setInterval(() => {
+        loadCleanupStats();
+    }, 60000);
 }
 
 // Add interactive effects
@@ -262,12 +394,14 @@ document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
         // Page became visible, refresh stats
         loadStatistics();
+        loadCleanupStats();
     }
 });
 
 // Handle window focus
 window.addEventListener('focus', function() {
     loadStatistics();
+    loadCleanupStats();
 });
 
 // Utility function for smooth scrolling (if needed)
@@ -304,6 +438,8 @@ window.addEventListener('load', function() {
 // Export functions for potential external use
 window.InfoPage = {
     loadStatistics,
+    loadCleanupStats,
     updateStatistics,
-    smoothScrollTo
+    smoothScrollTo,
+    handleCleanup
 };

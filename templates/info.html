@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>About SpyFleet - Tee Marine</title>
+    <title>About SpyFleet - TeeMarine</title>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/map.css') }}">
@@ -10,7 +10,7 @@
 <body>
     <!-- Top Bar -->
     <div class="topbar">
-        <div class="company">Tee Marine</div>
+        <div class="company">TeeMarine</div>
         <div style="display: flex; gap: 20px; align-items: center;">
             <a href="/" style="color: #a8c8ec; text-decoration: none;">Map View</a>
             <a href="/track" style="color: #a8c8ec; text-decoration: none;">Track Ships</a>
@@ -86,15 +86,15 @@
         <!-- Company Section -->
         <div class="section">
             <div class="section-header">
-                <h2>🏢 About Tee Marine ApS</h2>
+                <h2>🏢 About TeeMarine ApS</h2>
             </div>
             <div class="company-content">
                 <div class="company-info">
                     <div class="company-main">
                         <h3>Professional Ship Management Services</h3>
-                        <p>Tee Marine ApS is a specialized ship management company based in Esbjerg, Denmark, providing comprehensive maritime services to vessel owners and operators throughout Danish and international waters.</p>
+                        <p>TeeMarine ApS is a specialized ship management company based in Esbjerg, Denmark, providing comprehensive maritime services to vessel owners and operators throughout Danish and international waters.</p>
 
-                        <p>With deep expertise in maritime operations and a strategic location in one of Denmark's most important shipping hubs, Tee Marine delivers professional vessel management solutions tailored to the unique requirements of modern maritime commerce.</p>
+                        <p>With deep expertise in maritime operations and a strategic location in one of Denmark's most important shipping hubs, TeeMarine delivers professional vessel management solutions tailored to the unique requirements of modern maritime commerce.</p>
 
                         <div class="company-details">
                             <div class="detail-group">
@@ -126,7 +126,7 @@
                                 <div class="mission-icon">🎯</div>
                                 <div class="mission-text">
                                     <h4>Managed Fleet Focus</h4>
-                                    <p>Special highlighting and tracking capabilities for vessels under Tee Marine management, enabling focused operational oversight.</p>
+                                    <p>Special highlighting and tracking capabilities for vessels under TeeMarine management, enabling focused operational oversight.</p>
                                 </div>
                             </div>
                             <div class="mission-point">
@@ -180,8 +180,38 @@
                         </div>
                         <div class="stats-item">
                             <span class="stats-label">Coverage Area:</span>
-                            <span class="stats-value">Esbjerg Harbour + 25nm radius</span>
+                            <span class="stats-value">Esbjerg Harbour + 2nm radius</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Database Cleanup Section -->
+                <div class="database-cleanup">
+                    <h3>🗑️ Database Maintenance</h3>
+                    <div id="cleanupMessage" class="cleanup-message" style="display: none;"></div>
+                    <div class="cleanup-info">
+                        <div class="cleanup-stats">
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Total Position Records:</span>
+                                <span class="cleanup-value" id="totalPositions">-</span>
+                            </div>
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Ships with Positions:</span>
+                                <span class="cleanup-value" id="uniqueShips">-</span>
+                            </div>
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Duplicate Records:</span>
+                                <span class="cleanup-value" id="duplicatePositions">-</span>
+                            </div>
+                        </div>
+                        <div class="cleanup-actions">
+                            <button id="refreshStatsBtn" class="cleanup-btn secondary">📊 Refresh Stats</button>
+                            <button id="cleanupBtn" class="cleanup-btn primary" disabled>🧹 Clean Up Old Records</button>
+                        </div>
+                    </div>
+                    <div class="cleanup-description">
+                        <p><strong>What this does:</strong> Removes duplicate position records, keeping only the most recent position for each ship. This can significantly reduce database size and improve performance.</p>
+                        <p><strong>Safe operation:</strong> Your ships will continue to display normally on the map. Only redundant historical data is removed.</p>
                     </div>
                 </div>
             </div>
@@ -194,11 +224,11 @@
             </div>
             <div class="contact-content">
                 <div class="contact-info">
-                    <p>For inquiries about SpyFleet, technical support, or Tee Marine services, please contact us through our main office in Esbjerg.</p>
+                    <p>For inquiries about SpyFleet, technical support, or TeeMarine services, please contact us through our main office in Esbjerg.</p>
 
                     <div class="contact-details">
                         <div class="contact-item">
-                            <strong>Tee Marine ApS</strong><br>
+                            <strong>TeeMarine ApS</strong><br>
                             Ship Management Services<br>
                             Esbjerg, Denmark
                         </div>
@@ -211,7 +241,7 @@
         <div class="footer">
             <div class="footer-content">
                 <div class="footer-left">
-                    <p>&copy; 2025 Tee Marine ApS. All rights reserved.</p>
+                    <p>&copy; 2025 TeeMarine ApS. All rights reserved.</p>
                 </div>
                 <div class="footer-right">
                     <p>SpyFleet Maritime Tracking System</p>

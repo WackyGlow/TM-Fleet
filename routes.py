@@ -207,3 +207,25 @@ def register_debug_routes(app):
             "message": "Database cleanup completed",
             "deleted_positions": deleted_count
         })
+
+    @app.route("/admin/cleanup-stats")
+    def cleanup_stats():
+        """Get cleanup statistics."""
+        stats = AISDatabase.get_cleanup_stats()
+        return jsonify(stats)
+
+    @app.route("/admin/cleanup-positions", methods=["POST"])
+    def cleanup_positions():
+        """Clean up old position records."""
+        try:
+            deleted_count = AISDatabase.cleanup_old_positions()
+            return jsonify({
+                "success": True,
+                "message": f"Successfully cleaned up {deleted_count:,} old position records",
+                "deleted_count": deleted_count
+            })
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "message": f"Cleanup failed: {str(e)}"
+            }), 500
