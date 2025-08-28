@@ -115,7 +115,10 @@ class AISDatabase:
 
     @staticmethod
     def save_position(mmsi, position_data):
-        """Save ship position data."""
+        """
+        Save or update ship position data.
+        Updates existing position record instead of creating new ones.
+        """
         try:
             # Ensure ship exists
             ship = Ship.query.get(mmsi)
@@ -126,23 +129,41 @@ class AISDatabase:
             # Update ship's last seen
             ship.last_seen = datetime.now(UTC)
 
-            # Create position record
-            position = Position(
-                mmsi=mmsi,
-                latitude=position_data['latitude'],
-                longitude=position_data['longitude'],
-                course=position_data.get('course'),
-                speed=position_data.get('speed'),
-                heading=position_data.get('heading'),
-                nav_status=position_data.get('nav_status'),
-                turn_rate=position_data.get('turn_rate'),
-                position_accuracy=position_data.get('position_accuracy'),
-                timestamp=position_data['timestamp'] if isinstance(position_data['timestamp'], datetime)
-                else datetime.fromisoformat(position_data['timestamp'].replace('Z', '+00:00')),
-                message_type=position_data['msg_type']
-            )
+            # Look for existing position record for this ship
+            existing_position = Position.query.filter_by(mmsi=mmsi).first()
 
-            db.session.add(position)
+            if existing_position:
+                # Update existing position record
+                existing_position.latitude = position_data['latitude']
+                existing_position.longitude = position_data['longitude']
+                existing_position.course = position_data.get('course')
+                existing_position.speed = position_data.get('speed')
+                existing_position.heading = position_data.get('heading')
+                existing_position.nav_status = position_data.get('nav_status')
+                existing_position.turn_rate = position_data.get('turn_rate')
+                existing_position.position_accuracy = position_data.get('position_accuracy')
+                existing_position.timestamp = position_data['timestamp'] if isinstance(position_data['timestamp'],
+                                                                                       datetime) else datetime.fromisoformat(
+                    position_data['timestamp'].replace('Z', '+00:00'))
+                existing_position.message_type = position_data['msg_type']
+            else:
+                # Create new position record (first time we see this ship)
+                position = Position(
+                    mmsi=mmsi,
+                    latitude=position_data['latitude'],
+                    longitude=position_data['longitude'],
+                    course=position_data.get('course'),
+                    speed=position_data.get('speed'),
+                    heading=position_data.get('heading'),
+                    nav_status=position_data.get('nav_status'),
+                    turn_rate=position_data.get('turn_rate'),
+                    position_accuracy=position_data.get('position_accuracy'),
+                    timestamp=position_data['timestamp'] if isinstance(position_data['timestamp'], datetime)
+                    else datetime.fromisoformat(position_data['timestamp'].replace('Z', '+00:00')),
+                    message_type=position_data['msg_type']
+                )
+                db.session.add(position)
+
             db.session.commit()
             return True
 
@@ -192,32 +213,49 @@ class AISDatabase:
 
     @staticmethod
     def get_ship_track(mmsi, hours=24):
-        """Get position history for a ship."""
-        cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
-
-        positions = Position.query.filter(
-            Position.mmsi == mmsi,
-            Position.timestamp > cutoff_time
-        ).order_by(Position.timestamp.asc()).all()
-
-        return [pos.to_dict() for pos in positions]
+        """Get position history for a ship (just returns current position since we're not storing history)."""
+        position = Position.query.filter_by(mmsi=mmsi).first()
+        if position:
+            return [position.to_dict()]
+        return []
 
     @staticmethod
     def cleanup_old_positions(days=7):
-        """Remove position data older than specified days."""
+        """
+        Remove old position records, keeping only the most recent one per ship.
+        This is useful for one-time cleanup after switching to the new system.
+        """
         try:
-            cutoff_time = datetime.now(UTC) - timedelta(days=days)
+            # Count before cleanup
+            total_before = Position.query.count()
+            ships_count = db.session.query(Position.mmsi).distinct().count()
 
-            deleted_count = Position.query.filter(
-                Position.timestamp < cutoff_time
-            ).delete()
+            if total_before <= ships_count:
+                print("🧹 No cleanup needed - already optimized")
+                return 0
+
+            print(f"🧹 Cleaning up {total_before - ships_count} duplicate position records...")
+
+            # Get the most recent position ID for each ship
+            subquery = db.session.query(
+                Position.mmsi,
+                db.func.max(Position.id).label('max_id')
+            ).group_by(Position.mmsi).subquery()
+
+            # Delete all positions except the most recent ones
+            deleted_count = db.session.query(Position).filter(
+                ~Position.id.in_(
+                    db.session.query(subquery.c.max_id)
+                )
+            ).delete(synchronize_session=False)
 
             db.session.commit()
+
             print(f"🧹 Cleaned up {deleted_count} old position records")
             return deleted_count
 
         except Exception as e:
-            print(f"❌ Error cleaning up old positions: {e}")
+            print(f"❌ Error cleaning up positions: {e}")
             db.session.rollback()
             return 0
 
@@ -388,3 +426,21 @@ class AISDatabase:
         except Exception as e:
             print(f"❌ Error searching ships: {e}")
             return []
+
+    @staticmethod
+    def get_cleanup_stats():
+        """Get statistics about position records that could be cleaned up."""
+        try:
+            total_positions = Position.query.count()
+            unique_ships = db.session.query(Position.mmsi).distinct().count()
+            duplicate_positions = total_positions - unique_ships
+
+            return {
+                'total_positions': total_positions,
+                'unique_ships': unique_ships,
+                'duplicate_positions': duplicate_positions,
+                'cleanup_needed': duplicate_positions > 0
+            }
+        except Exception as e:
+            print(f"❌ Error getting cleanup stats: {e}")
+            return {}

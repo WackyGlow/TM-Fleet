@@ -513,6 +513,8 @@ function getShipTypeName(shipType) {
     if (!shipType) return 'Unknown';
 
     const shipTypes = {
+        0: "NA",
+        20: "Wing in ground (WIG)",
         30: 'Fishing',
         31: 'Towing',
         32: 'Towing (large)',
