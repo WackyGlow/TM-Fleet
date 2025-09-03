@@ -54,14 +54,15 @@
                 <div class="about-text">
                     <p>SpyFleet is a sophisticated maritime tracking system developed to provide real-time visibility of vessel movements within Esbjerg Harbour and the surrounding Danish coastal waters. The system leverages AIS (Automatic Identification System) technology to monitor and display ship positions, routes, and operational data.</p>
 
-                    <p>Built specifically for the needs of ship management operations in one of Denmark's busiest ports, SpyFleet offers both general maritime surveillance and specialized tracking capabilities for managed vessels, providing enhanced oversight and operational awareness.</p>
+                    <p>Behind the scenes, SpyFleet is powered by a Raspberry Pi 5 microcomputer hosted directly at the harbour. The device is managed remotely via BalenaCloud, enabling automated updates, containerized services, and reliable edge deployment. AIS signals are received using an RTL-SDR Blog V4 software-defined radio dongle, connected through a coax cable to a tuned dipole antenna optimized for VHF maritime frequencies. This combination ensures clear reception of AIS transponder data and continuous real-time processing even in a busy port environment.</p>
 
+                    <p>Built specifically for the needs of ship management operations in one of Denmark's busiest ports, SpyFleet offers both general maritime surveillance and specialized tracking capabilities for managed vessels, providing enhanced oversight and operational awareness.</p>
                     <div class="key-features">
                         <h3>Key Capabilities</h3>
                         <ul class="features-list">
                             <li>Real-time AIS message reception and processing</li>
                             <li>Interactive map visualization of vessel positions</li>
-                            <li>Customizable ship tracking and watchlists</li>
+                            <li>Customizable ship tracking and watchlist</li>
                             <li>Detailed vessel information and specifications</li>
                             <li>Historical position tracking and route analysis</li>
                             <li>Special highlighting for managed vessels</li>
@@ -151,7 +152,7 @@
                 <div class="tech-grid">
                     <div class="tech-card">
                         <h3>🛰️ AIS Technology</h3>
-                        <p>Professional-grade AIS receiver system capturing real-time vessel transponder data with full message decoding and multi-part message reassembly.</p>
+                        <p>Professional-grade AIS receiver system capturing real-time vessel transponder data with full message decoding and multipart message reassembly.</p>
                     </div>
                     <div class="tech-card">
                         <h3>🗺️ Interactive Mapping</h3>
@@ -162,9 +163,27 @@
                         <p>Robust SQLite database with indexed queries, automated cleanup, and efficient position history storage for performance optimization.</p>
                     </div>
                     <div class="tech-card">
+                        <h3>🔌 Remote Orchestration</h3>
+                        <p>The Raspberry Pi 5 runs under BalenaCloud orchestration. All services are containerized in Docker, allowing for secure OTA updates, performance monitoring, and remote troubleshooting of the harbour station without on-site maintenance.</p>
+                    </div>
+                    <div class="tech-card">
                         <h3>🔌 RESTful API</h3>
                         <p>Comprehensive API endpoints for external integrations, automated reporting, and third-party maritime system connectivity.</p>
                     </div>
+                </div>
+
+                <!-- 🔧 Hardware Setup (existing) -->
+                <div class="hardware-setup">
+                    <h3>🔧 Hardware Setup</h3>
+                    <p>The SpyFleet station is built on a compact but powerful edge-compute stack designed for continuous operation in a maritime environment:</p>
+                    <ul>
+                        <li><strong>Raspberry Pi 5</strong> – The main compute node, running containerized services for AIS decoding, data storage, and map rendering.</li>
+                        <li><strong>BalenaCloud Orchestration</strong> – Remote device management with secure OTA updates, health checks, and monitoring—no on-site intervention required.</li>
+                        <li><strong>RTL-SDR Blog V4 Dongle</strong> – High-performance SDR receiver capturing AIS VHF signals reliably in busy RF conditions.</li>
+                        <li><strong>Dipole Antenna + Coax Feed</strong> – Tuned VHF dipole mounted at the harbour for clear reception, connected via low-loss coax directly to the SDR.</li>
+                        <li><strong>Local Storage</strong> – SQLite position history with indexes and cleanup jobs to keep performance high on edge hardware.</li>
+                    </ul>
+                    <p>This setup combines low-cost hardware with professional-grade orchestration, making SpyFleet resilient and scalable for long-term maritime surveillance.</p>
                 </div>
 
                 <div class="system-stats">
@@ -185,33 +204,37 @@
                     </div>
                 </div>
 
-                <!-- Database Cleanup Section -->
+                <!-- Automatic Database Cleanup Status -->
                 <div class="database-cleanup">
-                    <h3>🗑️ Database Maintenance</h3>
-                    <div id="cleanupMessage" class="cleanup-message" style="display: none;"></div>
+                    <h3>🤖 Automatic Database Maintenance</h3>
                     <div class="cleanup-info">
                         <div class="cleanup-stats">
                             <div class="cleanup-stat">
-                                <span class="cleanup-label">Total Position Records:</span>
-                                <span class="cleanup-value" id="totalPositions">-</span>
+                                <span class="cleanup-label">Position Data Retention:</span>
+                                <span class="cleanup-value">2 hours maximum</span>
                             </div>
                             <div class="cleanup-stat">
-                                <span class="cleanup-label">Ships with Positions:</span>
-                                <span class="cleanup-value" id="uniqueShips">-</span>
+                                <span class="cleanup-label">Ship Data Retention:</span>
+                                <span class="cleanup-value">24 hours after last seen</span>
                             </div>
                             <div class="cleanup-stat">
-                                <span class="cleanup-label">Duplicate Records:</span>
-                                <span class="cleanup-value" id="duplicatePositions">-</span>
+                                <span class="cleanup-label">Cleanup Status:</span>
+                                <span class="cleanup-value" style="color: #16a34a;">✅ Active & Automatic</span>
                             </div>
-                        </div>
-                        <div class="cleanup-actions">
-                            <button id="refreshStatsBtn" class="cleanup-btn secondary">📊 Refresh Stats</button>
-                            <button id="cleanupBtn" class="cleanup-btn primary" disabled>🧹 Clean Up Old Records</button>
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Cleanup Frequency:</span>
+                                <span class="cleanup-value">Every 1000 AIS messages</span>
+                            </div>
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Current Records:</span>
+                                <span class="cleanup-value" id="dbRecordsCleanup">Loading...</span>
+                            </div>
                         </div>
                     </div>
                     <div class="cleanup-description">
-                        <p><strong>What this does:</strong> Removes duplicate position records, keeping only the most recent position for each ship. This can significantly reduce database size and improve performance.</p>
-                        <p><strong>Safe operation:</strong> Your ships will continue to display normally on the map. Only redundant historical data is removed.</p>
+                        <p><strong>Automatic maintenance:</strong> The system continuously removes old data to maintain optimal performance. Position records older than 2 hours and ship records not seen for 24 hours are automatically deleted every 1000 AIS messages.</p>
+                        <p><strong>Protected data:</strong> Ships being actively tracked are never automatically deleted, ensuring your managed vessels remain visible even during extended periods without AIS transmissions.</p>
+                        <p><strong>Performance benefits:</strong> Automatic cleanup keeps database size manageable, ensures fast queries, maintains system responsiveness, and prevents storage overflow on the Raspberry Pi.</p>
                     </div>
                 </div>
             </div>

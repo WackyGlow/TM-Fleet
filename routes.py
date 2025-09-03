@@ -12,6 +12,7 @@ def register_routes(app):
     register_view_routes(app)
     register_api_routes(app)
     register_debug_routes(app)
+    register_cleanup_routes(app)  # NEW: Age-based cleanup routes
 
 
 def register_view_routes(app):
@@ -228,4 +229,108 @@ def register_debug_routes(app):
             return jsonify({
                 "success": False,
                 "message": f"Cleanup failed: {str(e)}"
+            }), 500
+
+def register_cleanup_routes(app):
+    """Register NEW age-based cleanup API endpoints."""
+
+    @app.route("/api/cleanup/age-stats")
+    def get_age_cleanup_stats():
+        """Get statistics about old data that can be cleaned up by age."""
+        position_hours = float(request.args.get('position_hours', app.config.get('POSITION_MAX_AGE_HOURS', 2.0)))
+        ship_hours = float(request.args.get('ship_hours', app.config.get('SHIP_MAX_AGE_HOURS', 24.0)))
+
+        stats = AISDatabase.get_old_data_stats(position_hours, ship_hours)
+        return jsonify(stats)
+
+    @app.route("/api/cleanup/age-cleanup", methods=["POST"])
+    def perform_age_cleanup():
+        """Manually trigger age-based cleanup."""
+        try:
+            data = request.get_json() or {}
+            position_hours = float(data.get('position_hours', app.config.get('POSITION_MAX_AGE_HOURS', 2.0)))
+            ship_hours = float(data.get('ship_hours', app.config.get('SHIP_MAX_AGE_HOURS', 24.0)))
+
+            result = AISDatabase.cleanup_old_data_by_age(position_hours, ship_hours)
+
+            if result.get('error'):
+                return jsonify({
+                    "success": False,
+                    "message": f"Age-based cleanup failed: {result['error']}"
+                }), 500
+            else:
+                positions_deleted = result.get('positions_deleted', 0)
+                ships_deleted = result.get('ships_deleted', 0)
+
+                return jsonify({
+                    "success": True,
+                    "message": f"Age-based cleanup completed: {positions_deleted} positions and {ships_deleted} ships deleted",
+                    "result": result
+                })
+
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "message": f"Age-based cleanup failed: {str(e)}"
+            }), 500
+
+    @app.route("/api/cleanup/status")
+    def get_cleanup_status():
+        """Get comprehensive cleanup status and configuration."""
+        from services.ais_service import AISService
+        ais_service = AISService.get_instance()
+
+        if ais_service:
+            status = ais_service.get_cleanup_status()
+            return jsonify(status)
+        else:
+            return jsonify({
+                "error": "AIS service not available"
+            }), 503
+
+    @app.route("/api/cleanup/config")
+    def get_cleanup_config():
+        """Get current cleanup configuration."""
+        return jsonify({
+            "auto_cleanup_enabled": app.config.get('AUTO_CLEANUP_ENABLED', True),
+            "position_max_age_hours": app.config.get('POSITION_MAX_AGE_HOURS', 2.0),
+            "ship_max_age_hours": app.config.get('SHIP_MAX_AGE_HOURS', 24.0),
+            "age_cleanup_interval": app.config.get('AGE_CLEANUP_INTERVAL', 1000),
+            "duplicate_cleanup_interval": app.config.get('DUPLICATE_CLEANUP_INTERVAL', 5000),
+            "auto_cleanup_interval_messages": app.config.get('AUTO_CLEANUP_INTERVAL_MESSAGES', 500)
+        })
+
+    @app.route("/api/cleanup/config", methods=["POST"])
+    def update_cleanup_config():
+        """Update cleanup configuration (runtime only)."""
+        try:
+            data = request.get_json()
+            if not data:
+                return jsonify({"success": False, "message": "No configuration data provided"}), 400
+
+            # Note: This only updates runtime config, not persistent config
+            updated_settings = []
+
+            if 'position_max_age_hours' in data:
+                app.config['POSITION_MAX_AGE_HOURS'] = float(data['position_max_age_hours'])
+                updated_settings.append(f"position_max_age_hours = {data['position_max_age_hours']}")
+
+            if 'ship_max_age_hours' in data:
+                app.config['SHIP_MAX_AGE_HOURS'] = float(data['ship_max_age_hours'])
+                updated_settings.append(f"ship_max_age_hours = {data['ship_max_age_hours']}")
+
+            if 'auto_cleanup_enabled' in data:
+                app.config['AUTO_CLEANUP_ENABLED'] = bool(data['auto_cleanup_enabled'])
+                updated_settings.append(f"auto_cleanup_enabled = {data['auto_cleanup_enabled']}")
+
+            return jsonify({
+                "success": True,
+                "message": f"Configuration updated: {', '.join(updated_settings)}",
+                "note": "Changes are runtime only and will reset on application restart"
+            })
+
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "message": f"Configuration update failed: {str(e)}"
             }), 500

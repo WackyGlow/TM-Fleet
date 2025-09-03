@@ -174,19 +174,28 @@ class AISDatabase:
 
     @staticmethod
     def get_recent_ships(hours=24):
-        """Get ships seen in the last N hours with their latest positions."""
-        cutoff_time = datetime.now(UTC) - timedelta(hours=hours)
+        """Get ships with recent positions based on navigation status - smart filtering."""
+        current_time = datetime.now(UTC)
 
-        # Get ships with their latest position
-        ships = db.session.query(Ship).filter(
-            Ship.last_seen > cutoff_time
-        ).order_by(Ship.last_seen.desc()).all()
+        # Different timeouts based on nav status
+        underway_cutoff = current_time - timedelta(minutes=2)  # 2 minutes for moving ships
+        moored_cutoff = current_time - timedelta(hours=2)  # 2 hours for stationary ships
+
+        # Get all ships with positions
+        ships_with_positions = db.session.query(Ship).join(Position).all()
 
         result = []
-        for ship in ships:
-            ship_dict = ship.to_dict()
+        for ship in ships_with_positions:
             latest_pos = ship.latest_position
-            if latest_pos:
+            if not latest_pos:
+                continue
+
+            # Check if position is fresh enough based on nav status
+            is_stationary = latest_pos.nav_status in [1, 5, 6]  # At anchor, Moored, Aground
+            cutoff_time = moored_cutoff if is_stationary else underway_cutoff
+
+            if latest_pos.timestamp > cutoff_time:
+                ship_dict = ship.to_dict()
                 ship_dict.update({
                     'latitude': latest_pos.latitude,
                     'longitude': latest_pos.longitude,
@@ -195,9 +204,8 @@ class AISDatabase:
                     'heading': latest_pos.heading,
                     'nav_status': latest_pos.nav_status
                 })
-            # Add tracking status
-            ship_dict['is_tracked'] = ship.is_tracked
-            result.append(ship_dict)
+                ship_dict['is_tracked'] = ship.is_tracked
+                result.append(ship_dict)
 
         return result
 
@@ -219,11 +227,89 @@ class AISDatabase:
             return [position.to_dict()]
         return []
 
+    # POSITION CLEANUP METHODS - Ships are never deleted, only position records
+    @staticmethod
+    def cleanup_old_positions_by_nav_status(underway_minutes=2, moored_hours=2):
+        """
+        Remove old position records based on navigation status.
+        Ships themselves are NEVER deleted - only position records.
+
+        Args:
+            underway_minutes: Delete position records for moving ships older than this many minutes
+            moored_hours: Delete position records for stationary ships older than this many hours
+
+        Returns:
+            dict: Statistics about cleanup operations
+        """
+        try:
+            current_time = datetime.now(UTC)
+            underway_cutoff = current_time - timedelta(minutes=underway_minutes)
+            moored_cutoff = current_time - timedelta(hours=moored_hours)
+
+            # Count old positions by status
+            old_underway_positions = Position.query.filter(
+                Position.timestamp < underway_cutoff,
+                ~Position.nav_status.in_([1, 5, 6])  # Not at anchor, moored, or aground
+            ).count()
+
+            old_moored_positions = Position.query.filter(
+                Position.timestamp < moored_cutoff,
+                Position.nav_status.in_([1, 5, 6])  # At anchor, moored, or aground
+            ).count()
+
+            if old_underway_positions == 0 and old_moored_positions == 0:
+                print(f"🧹 No old positions to cleanup (underway >{underway_minutes}min, moored >{moored_hours}h)")
+                return {
+                    'underway_positions_deleted': 0,
+                    'moored_positions_deleted': 0,
+                    'underway_cutoff': underway_cutoff.isoformat(),
+                    'moored_cutoff': moored_cutoff.isoformat()
+                }
+
+            print(f"🧹 Starting position cleanup by navigation status...")
+            print(
+                f"   - Underway positions older than {underway_minutes}min ({underway_cutoff}): {old_underway_positions} records")
+            print(f"   - Moored positions older than {moored_hours}h ({moored_cutoff}): {old_moored_positions} records")
+
+            # Delete old underway position records
+            underway_deleted = db.session.query(Position).filter(
+                Position.timestamp < underway_cutoff,
+                ~Position.nav_status.in_([1, 5, 6])
+            ).delete(synchronize_session=False)
+
+            # Delete old moored position records
+            moored_deleted = db.session.query(Position).filter(
+                Position.timestamp < moored_cutoff,
+                Position.nav_status.in_([1, 5, 6])
+            ).delete(synchronize_session=False)
+
+            db.session.commit()
+
+            print(f"✅ Position cleanup completed:")
+            print(f"   - Deleted {underway_deleted} old underway position records")
+            print(f"   - Deleted {moored_deleted} old moored position records")
+
+            return {
+                'underway_positions_deleted': underway_deleted,
+                'moored_positions_deleted': moored_deleted,
+                'underway_cutoff': underway_cutoff.isoformat(),
+                'moored_cutoff': moored_cutoff.isoformat()
+            }
+
+        except Exception as e:
+            print(f"❌ Error in position cleanup: {e}")
+            db.session.rollback()
+            return {
+                'underway_positions_deleted': 0,
+                'moored_positions_deleted': 0,
+                'error': str(e)
+            }
+
     @staticmethod
     def cleanup_old_positions(days=7):
         """
         Remove old position records, keeping only the most recent one per ship.
-        This is useful for one-time cleanup after switching to the new system.
+        This is useful for duplicate cleanup.
         """
         try:
             # Count before cleanup
@@ -260,6 +346,63 @@ class AISDatabase:
             return 0
 
     @staticmethod
+    def get_old_position_stats(underway_minutes=2, moored_hours=2):
+        """
+        Get statistics about old position records that would be cleaned up.
+        Ships are never deleted, only position records.
+
+        Args:
+            underway_minutes: Minutes threshold for underway ship positions
+            moored_hours: Hours threshold for moored ship positions
+
+        Returns:
+            dict: Statistics about old position data
+        """
+        try:
+            current_time = datetime.now(UTC)
+            underway_cutoff = current_time - timedelta(minutes=underway_minutes)
+            moored_cutoff = current_time - timedelta(hours=moored_hours)
+
+            # Count old positions by navigation status
+            old_underway_positions = Position.query.filter(
+                Position.timestamp < underway_cutoff,
+                ~Position.nav_status.in_([1, 5, 6])  # Not at anchor, moored, or aground
+            ).count()
+
+            old_moored_positions = Position.query.filter(
+                Position.timestamp < moored_cutoff,
+                Position.nav_status.in_([1, 5, 6])  # At anchor, moored, or aground
+            ).count()
+
+            # Get total counts
+            total_positions = Position.query.count()
+            total_ships = Ship.query.count()
+
+            return {
+                'old_underway_positions': old_underway_positions,
+                'old_moored_positions': old_moored_positions,
+                'total_old_positions': old_underway_positions + old_moored_positions,
+                'total_positions': total_positions,
+                'total_ships': total_ships,
+                'underway_cutoff': underway_cutoff.isoformat(),
+                'moored_cutoff': moored_cutoff.isoformat(),
+                'underway_minutes': underway_minutes,
+                'moored_hours': moored_hours,
+                'cleanup_needed': old_underway_positions > 0 or old_moored_positions > 0
+            }
+
+        except Exception as e:
+            print(f"❌ Error getting old position stats: {e}")
+            return {
+                'old_underway_positions': 0,
+                'old_moored_positions': 0,
+                'total_old_positions': 0,
+                'total_positions': 0,
+                'total_ships': 0,
+                'error': str(e)
+            }
+
+    @staticmethod
     def get_database_stats():
         """Get database statistics."""
         try:
@@ -267,22 +410,52 @@ class AISDatabase:
             position_count = Position.query.count()
             tracked_count = TrackedShip.query.count()
 
-            # Active ships in last hour
-            cutoff = datetime.now(UTC) - timedelta(hours=1)
-            active_ships = Ship.query.filter(Ship.last_seen > cutoff).count()
+            # Active ships based on navigation status and position age
+            current_time = datetime.now(UTC)
+            underway_cutoff = current_time - timedelta(minutes=2)
+            moored_cutoff = current_time - timedelta(hours=2)
+
+            # Count active ships (ships with fresh positions based on nav status)
+            active_underway = db.session.query(Ship).join(Position).filter(
+                Position.timestamp > underway_cutoff,
+                ~Position.nav_status.in_([1, 5, 6])
+            ).count()
+
+            active_moored = db.session.query(Ship).join(Position).filter(
+                Position.timestamp > moored_cutoff,
+                Position.nav_status.in_([1, 5, 6])
+            ).count()
 
             return {
                 'total_ships': ship_count,
                 'total_positions': position_count,
                 'tracked_ships': tracked_count,
-                'active_ships_last_hour': active_ships
+                'active_ships_smart': active_underway + active_moored
             }
 
         except Exception as e:
             print(f"❌ Error getting database stats: {e}")
             return {}
 
-    # New methods for tracked ships management
+    @staticmethod
+    def get_cleanup_stats():
+        """Get statistics about position records that could be cleaned up."""
+        try:
+            total_positions = Position.query.count()
+            unique_ships = db.session.query(Position.mmsi).distinct().count()
+            duplicate_positions = total_positions - unique_ships
+
+            return {
+                'total_positions': total_positions,
+                'unique_ships': unique_ships,
+                'duplicate_positions': duplicate_positions,
+                'cleanup_needed': duplicate_positions > 0
+            }
+        except Exception as e:
+            print(f"❌ Error getting cleanup stats: {e}")
+            return {}
+
+    # TRACKED SHIPS METHODS
     @staticmethod
     def get_tracked_ships():
         """Get all tracked ships with their current data."""
@@ -426,21 +599,3 @@ class AISDatabase:
         except Exception as e:
             print(f"❌ Error searching ships: {e}")
             return []
-
-    @staticmethod
-    def get_cleanup_stats():
-        """Get statistics about position records that could be cleaned up."""
-        try:
-            total_positions = Position.query.count()
-            unique_ships = db.session.query(Position.mmsi).distinct().count()
-            duplicate_positions = total_positions - unique_ships
-
-            return {
-                'total_positions': total_positions,
-                'unique_ships': unique_ships,
-                'duplicate_positions': duplicate_positions,
-                'cleanup_needed': duplicate_positions > 0
-            }
-        except Exception as e:
-            print(f"❌ Error getting cleanup stats: {e}")
-            return {}
