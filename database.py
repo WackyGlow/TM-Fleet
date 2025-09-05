@@ -194,7 +194,7 @@ class AISDatabase:
             is_stationary = latest_pos.nav_status in [1, 5, 6]  # At anchor, Moored, Aground
             cutoff_time = moored_cutoff if is_stationary else underway_cutoff
 
-            if latest_pos.timestamp > cutoff_time:
+            if latest_pos.timestamp.replace(tzinfo=UTC) > cutoff_time:
                 ship_dict = ship.to_dict()
                 ship_dict.update({
                     'latitude': latest_pos.latitude,
@@ -388,7 +388,7 @@ class AISDatabase:
                 'moored_cutoff': moored_cutoff.isoformat(),
                 'underway_minutes': underway_minutes,
                 'moored_hours': moored_hours,
-                'cleanup_needed': old_underway_positions > 0 or old_moored_positions > 0
+                'cleanup_needed': old_underway_positions > 0 or old_moored_positions > 0,
             }
 
         except Exception as e:

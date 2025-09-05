@@ -54,19 +54,19 @@
                 <div class="about-text">
                     <p>SpyFleet is a sophisticated maritime tracking system developed to provide real-time visibility of vessel movements within Esbjerg Harbour and the surrounding Danish coastal waters. The system leverages AIS (Automatic Identification System) technology to monitor and display ship positions, routes, and operational data.</p>
 
-                    <p>Behind the scenes, SpyFleet is powered by a Raspberry Pi 5 microcomputer hosted directly at the harbour. The device is managed remotely via BalenaCloud, enabling automated updates, containerized services, and reliable edge deployment. AIS signals are received using an RTL-SDR Blog V4 software-defined radio dongle, connected through a coax cable to a tuned dipole antenna optimized for VHF maritime frequencies. This combination ensures clear reception of AIS transponder data and continuous real-time processing even in a busy port environment.</p>
-
                     <p>Built specifically for the needs of ship management operations in one of Denmark's busiest ports, SpyFleet offers both general maritime surveillance and specialized tracking capabilities for managed vessels, providing enhanced oversight and operational awareness.</p>
+
                     <div class="key-features">
                         <h3>Key Capabilities</h3>
                         <ul class="features-list">
                             <li>Real-time AIS message reception and processing</li>
                             <li>Interactive map visualization of vessel positions</li>
-                            <li>Customizable ship tracking and watchlist</li>
+                            <li>Customizable ship tracking and watchlists</li>
                             <li>Detailed vessel information and specifications</li>
                             <li>Historical position tracking and route analysis</li>
                             <li>Special highlighting for managed vessels</li>
                             <li>Professional maritime database management</li>
+                            <li>Intelligent position data cleanup based on navigation status</li>
                         </ul>
                     </div>
                 </div>
@@ -152,7 +152,7 @@
                 <div class="tech-grid">
                     <div class="tech-card">
                         <h3>🛰️ AIS Technology</h3>
-                        <p>Professional-grade AIS receiver system capturing real-time vessel transponder data with full message decoding and multipart message reassembly.</p>
+                        <p>Professional-grade AIS receiver system capturing real-time vessel transponder data with full message decoding and multi-part message reassembly.</p>
                     </div>
                     <div class="tech-card">
                         <h3>🗺️ Interactive Mapping</h3>
@@ -163,27 +163,17 @@
                         <p>Robust SQLite database with indexed queries, automated cleanup, and efficient position history storage for performance optimization.</p>
                     </div>
                     <div class="tech-card">
-                        <h3>🔌 Remote Orchestration</h3>
-                        <p>The Raspberry Pi 5 runs under BalenaCloud orchestration. All services are containerized in Docker, allowing for secure OTA updates, performance monitoring, and remote troubleshooting of the harbour station without on-site maintenance.</p>
-                    </div>
-                    <div class="tech-card">
                         <h3>🔌 RESTful API</h3>
                         <p>Comprehensive API endpoints for external integrations, automated reporting, and third-party maritime system connectivity.</p>
                     </div>
-                </div>
-
-                <!-- 🔧 Hardware Setup (existing) -->
-                <div class="hardware-setup">
-                    <h3>🔧 Hardware Setup</h3>
-                    <p>The SpyFleet station is built on a compact but powerful edge-compute stack designed for continuous operation in a maritime environment:</p>
-                    <ul>
-                        <li><strong>Raspberry Pi 5</strong> – The main compute node, running containerized services for AIS decoding, data storage, and map rendering.</li>
-                        <li><strong>BalenaCloud Orchestration</strong> – Remote device management with secure OTA updates, health checks, and monitoring—no on-site intervention required.</li>
-                        <li><strong>RTL-SDR Blog V4 Dongle</strong> – High-performance SDR receiver capturing AIS VHF signals reliably in busy RF conditions.</li>
-                        <li><strong>Dipole Antenna + Coax Feed</strong> – Tuned VHF dipole mounted at the harbour for clear reception, connected via low-loss coax directly to the SDR.</li>
-                        <li><strong>Local Storage</strong> – SQLite position history with indexes and cleanup jobs to keep performance high on edge hardware.</li>
-                    </ul>
-                    <p>This setup combines low-cost hardware with professional-grade orchestration, making SpyFleet resilient and scalable for long-term maritime surveillance.</p>
+                    <div class="tech-card">
+                        <h3>🧹 Smart Cleanup</h3>
+                        <p>Time-based position data management - underway ships cleaned every 2 minutes, moored ships every 2 hours, running automatically every 5 minutes.</p>
+                    </div>
+                    <div class="tech-card">
+                        <h3>⚡ Real-time Processing</h3>
+                        <p>High-performance message processing with automatic cleanup intervals and configurable retention policies for optimal system performance.</p>
+                    </div>
                 </div>
 
                 <div class="system-stats">
@@ -198,43 +188,135 @@
                             <span class="stats-value" id="systemUptime">Operational</span>
                         </div>
                         <div class="stats-item">
+                            <span class="stats-label">AIS Messages Processed:</span>
+                            <span class="stats-value" id="aisMessageCount">Loading...</span>
+                        </div>
+                        <div class="stats-item">
                             <span class="stats-label">Coverage Area:</span>
                             <span class="stats-value">Esbjerg Harbour + 2nm radius</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Automatic Database Cleanup Status -->
+                <!-- Position Statistics Section -->
                 <div class="database-cleanup">
-                    <h3>🤖 Automatic Database Maintenance</h3>
+                    <h3>📊 Position Data Statistics</h3>
+                    <div id="positionStatsMessage" class="cleanup-message" style="display: none;"></div>
                     <div class="cleanup-info">
                         <div class="cleanup-stats">
-                            <div class="cleanup-stat">
-                                <span class="cleanup-label">Position Data Retention:</span>
-                                <span class="cleanup-value">2 hours maximum</span>
+                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px;">
+                                <div style="background: #e3f2fd; padding: 15px; border-radius: 6px; border-left: 4px solid #2196f3;">
+                                    <h4 style="margin: 0 0 10px 0; color: #1976d2;">⚓ Sailing Ships</h4>
+                                    <div class="cleanup-stat">
+                                        <span class="cleanup-label">Ships:</span>
+                                        <span class="cleanup-value" id="sailingShips">-</span>
+                                    </div>
+                                    <div class="cleanup-stat">
+                                        <span class="cleanup-label">Total Positions:</span>
+                                        <span class="cleanup-value" id="sailingPositions">-</span>
+                                    </div>
+                                    <div class="cleanup-stat">
+                                        <span class="cleanup-label">Old Positions (>2min):</span>
+                                        <span class="cleanup-value" id="sailingOldPositions">-</span>
+                                    </div>
+                                </div>
+                                <div style="background: #f3e5f5; padding: 15px; border-radius: 6px; border-left: 4px solid #9c27b0;">
+                                    <h4 style="margin: 0 0 10px 0; color: #7b1fa2;">🔒 Moored Ships</h4>
+                                    <div class="cleanup-stat">
+                                        <span class="cleanup-label">Ships:</span>
+                                        <span class="cleanup-value" id="mooredShips">-</span>
+                                    </div>
+                                    <div class="cleanup-stat">
+                                        <span class="cleanup-label">Total Positions:</span>
+                                        <span class="cleanup-value" id="mooredPositions">-</span>
+                                    </div>
+                                    <div class="cleanup-stat">
+                                        <span class="cleanup-label">Old Positions (>1hr):</span>
+                                        <span class="cleanup-value" id="mooredOldPositions">-</span>
+                                    </div>
+                                </div>
+                                <div style="background: #fff3e0; padding: 15px; border-radius: 6px; border-left: 4px solid #ff9800;">
+                                    <h4 style="margin: 0 0 10px 0; color: #f57c00;">❓ Unknown Status</h4>
+                                    <div class="cleanup-stat">
+                                        <span class="cleanup-label">Total Positions:</span>
+                                        <span class="cleanup-value" id="unknownPositions">-</span>
+                                    </div>
+                                    <div class="cleanup-stat">
+                                        <span class="cleanup-label">Old Positions (>1hr):</span>
+                                        <span class="cleanup-value" id="unknownOldPositions">-</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="cleanup-stat">
-                                <span class="cleanup-label">Ship Data Retention:</span>
-                                <span class="cleanup-value">24 hours after last seen</span>
+                            <div class="cleanup-stat" style="background: #fff; padding: 15px; border-radius: 6px; border: 2px solid #4caf50;">
+                                <span class="cleanup-label" style="font-size: 1.1em; font-weight: bold;">Total Cleanup Candidates:</span>
+                                <span class="cleanup-value" style="font-size: 1.3em; font-weight: bold; color: #2e7d32;" id="cleanupCandidates">-</span>
                             </div>
-                            <div class="cleanup-stat">
-                                <span class="cleanup-label">Cleanup Status:</span>
-                                <span class="cleanup-value" style="color: #16a34a;">✅ Active & Automatic</span>
-                            </div>
-                            <div class="cleanup-stat">
-                                <span class="cleanup-label">Cleanup Frequency:</span>
-                                <span class="cleanup-value">Every 1000 AIS messages</span>
-                            </div>
-                            <div class="cleanup-stat">
-                                <span class="cleanup-label">Current Records:</span>
-                                <span class="cleanup-value" id="dbRecordsCleanup">Loading...</span>
-                            </div>
+                        </div>
+                        <div class="cleanup-actions">
+                            <button id="refreshPositionStatsBtn" class="cleanup-btn secondary">📊 Refresh Stats</button>
+                            <button id="statusCleanupBtn" class="cleanup-btn primary" disabled>🧹 Status-Based Cleanup</button>
                         </div>
                     </div>
                     <div class="cleanup-description">
-                        <p><strong>Automatic maintenance:</strong> The system continuously removes old data to maintain optimal performance. Position records older than 2 hours and ship records not seen for 24 hours are automatically deleted every 1000 AIS messages.</p>
-                        <p><strong>Protected data:</strong> Ships being actively tracked are never automatically deleted, ensuring your managed vessels remain visible even during extended periods without AIS transmissions.</p>
-                        <p><strong>Performance benefits:</strong> Automatic cleanup keeps database size manageable, ensures fast queries, maintains system responsiveness, and prevents storage overflow on the Raspberry Pi.</p>
+                        <p><strong>Smart Cleanup Strategy:</strong> The system automatically removes old position data based on ship navigation status to optimize database performance while maintaining operational relevance.</p>
+                        <p><strong>Sailing Ships:</strong> Positions older than 2 minutes are removed since these ships move frequently and recent positions are most relevant.</p>
+                        <p><strong>Moored Ships:</strong> Positions older than 1 hour are removed since these ships are stationary and don't need frequent position updates.</p>
+                        <p><strong>Automatic Operation:</strong> This cleanup runs automatically every <span id="cleanupIntervalConfig">5,000</span> messages. Status: <span id="statusCleanupEnabled">Loading...</span></p>
+                    </div>
+                </div>
+
+                <!-- AIS Service Statistics -->
+                <div class="database-cleanup">
+                    <h3>📡 AIS Service Status</h3>
+                    <div class="cleanup-info">
+                        <div class="cleanup-stats">
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Messages Processed:</span>
+                                <span class="cleanup-value" id="messageCount">-</span>
+                            </div>
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Last Status Cleanup at Message:</span>
+                                <span class="cleanup-value" id="lastStatusCleanup">-</span>
+                            </div>
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Sailing Ship Timeout:</span>
+                                <span class="cleanup-value" id="sailingTimeoutConfig">Loading...</span>
+                            </div>
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Moored Ship Timeout:</span>
+                                <span class="cleanup-value" id="mooredTimeoutConfig">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Database Cleanup Section -->
+                <div class="database-cleanup">
+                    <h3>🗑️ Database Maintenance</h3>
+                    <div id="cleanupMessage" class="cleanup-message" style="display: none;"></div>
+                    <div class="cleanup-info">
+                        <div class="cleanup-stats">
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Total Position Records:</span>
+                                <span class="cleanup-value" id="totalPositions">-</span>
+                            </div>
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Ships with Positions:</span>
+                                <span class="cleanup-value" id="uniqueShips">-</span>
+                            </div>
+                            <div class="cleanup-stat">
+                                <span class="cleanup-label">Duplicate Records:</span>
+                                <span class="cleanup-value" id="duplicatePositions">-</span>
+                            </div>
+                        </div>
+                        <div class="cleanup-actions">
+                            <button id="refreshStatsBtn" class="cleanup-btn secondary">📊 Refresh Stats</button>
+                            <button id="cleanupBtn" class="cleanup-btn primary" disabled>🧹 Clean Up Old Records</button>
+                        </div>
+                    </div>
+                    <div class="cleanup-description">
+                        <p><strong>What this does:</strong> Removes duplicate position records, keeping only the most recent position for each ship. This can significantly reduce database size and improve performance.</p>
+                        <p><strong>Safe operation:</strong> Your ships will continue to display normally on the map. Only redundant historical data is removed.</p>
                     </div>
                 </div>
             </div>

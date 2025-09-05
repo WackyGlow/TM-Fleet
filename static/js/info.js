@@ -9,11 +9,42 @@ document.addEventListener('DOMContentLoaded', function() {
 // Initialize the info page
 function initializeInfoPage() {
     loadStatistics();
+    loadPositionStatistics();
+    loadAISServiceStatus();
+    loadDatabaseStats();
+    setupEventListeners();
     startStatisticsRefresh();
     addInteractiveEffects();
 }
 
-// Load system statistics
+// Setup event listeners for buttons
+function setupEventListeners() {
+    // Position Stats button
+    const refreshPositionBtn = document.getElementById('refreshPositionStatsBtn');
+    if (refreshPositionBtn) {
+        refreshPositionBtn.addEventListener('click', loadPositionStatistics);
+    }
+
+    // Status cleanup button
+    const statusCleanupBtn = document.getElementById('statusCleanupBtn');
+    if (statusCleanupBtn) {
+        statusCleanupBtn.addEventListener('click', performStatusCleanup);
+    }
+
+    // Database refresh button
+    const refreshStatsBtn = document.getElementById('refreshStatsBtn');
+    if (refreshStatsBtn) {
+        refreshStatsBtn.addEventListener('click', loadDatabaseStats);
+    }
+
+    // Database cleanup button
+    const cleanupBtn = document.getElementById('cleanupBtn');
+    if (cleanupBtn) {
+        cleanupBtn.addEventListener('click', performDatabaseCleanup);
+    }
+}
+
+// Load basic system statistics
 async function loadStatistics() {
     try {
         // Load database statistics
@@ -28,7 +59,58 @@ async function loadStatistics() {
     }
 }
 
-// Update statistics in the UI
+// Load position statistics for cleanup analysis
+async function loadPositionStatistics() {
+    try {
+        const response = await fetch('/api/cleanup/age-stats');
+        const data = await response.json();
+
+        updatePositionStatistics(data);
+        enableCleanupButton();
+
+    } catch (error) {
+        console.error('Error loading position statistics:', error);
+        showMessage('positionStatsMessage', 'Error loading position statistics: ' + error.message, 'error');
+    }
+}
+
+// Load AIS service status
+async function loadAISServiceStatus() {
+    try {
+        const response = await fetch('/api/cleanup/status');
+        const data = await response.json();
+
+        updateAISServiceStatus(data);
+
+    } catch (error) {
+        console.error('Error loading AIS service status:', error);
+        // Try fallback config endpoint
+        try {
+            const configResponse = await fetch('/api/cleanup/config');
+            const configData = await configResponse.json();
+            updateAISServiceConfig(configData);
+        } catch (configError) {
+            console.error('Error loading AIS config:', configError);
+        }
+    }
+}
+
+// Load database maintenance statistics
+async function loadDatabaseStats() {
+    try {
+        const response = await fetch('/admin/cleanup-stats');
+        const data = await response.json();
+
+        updateDatabaseStats(data);
+        enableDatabaseCleanupButton();
+
+    } catch (error) {
+        console.error('Error loading database stats:', error);
+        showMessage('cleanupMessage', 'Error loading database statistics: ' + error.message, 'error');
+    }
+}
+
+// Update basic statistics in the UI
 function updateStatistics(stats) {
     // Hero section stats
     updateElement('totalShips', formatNumber(stats.total_ships || 0));
@@ -38,12 +120,176 @@ function updateStatistics(stats) {
     // Technical section stats
     const totalRecords = (stats.total_ships || 0) + (stats.total_positions || 0);
     updateElement('dbRecords', formatNumber(totalRecords));
-
-    // Cleanup section stats - show current record count
-    updateElement('dbRecordsCleanup', formatNumber(totalRecords));
+    updateElement('aisMessageCount', formatNumber(stats.total_positions || 0));
 
     // Add visual feedback for loaded stats
     animateStatCards();
+}
+
+// Update position statistics
+function updatePositionStatistics(data) {
+    if (data.error) {
+        showMessage('positionStatsMessage', 'Error: ' + data.error, 'error');
+        return;
+    }
+
+    // Sailing ships data
+    updateElement('sailingShips', formatNumber(data.underway_ships || 0));
+    updateElement('sailingPositions', formatNumber(data.underway_total_positions || 0));
+    updateElement('sailingOldPositions', formatNumber(data.old_underway_positions || 0));
+
+    // Moored ships data
+    updateElement('mooredShips', formatNumber(data.moored_ships || 0));
+    updateElement('mooredPositions', formatNumber(data.moored_total_positions || 0));
+    updateElement('mooredOldPositions', formatNumber(data.old_moored_positions || 0));
+
+    // Unknown status data
+    updateElement('unknownPositions', formatNumber(data.unknown_total_positions || 0));
+    updateElement('unknownOldPositions', formatNumber(data.unknown_old_positions || 0));
+
+    // Total cleanup candidates
+    const totalCleanup = (data.underway_old_positions || 0) + (data.moored_old_positions || 0) + (data.unknown_old_positions || 0);
+    updateElement('cleanupCandidates', formatNumber(totalCleanup));
+
+    // Show success message
+    hideMessage('positionStatsMessage');
+}
+
+// Update AIS service status
+function updateAISServiceStatus(data) {
+    updateElement('messageCount', formatNumber(data.messages_processed || 0));
+    updateElement('lastStatusCleanup', formatNumber(data.last_age_cleanup_at_message || 0));
+    updateElement('sailingTimeoutConfig', (data.underway_timeout_minutes || 2) + ' minutes');
+    updateElement('mooredTimeoutConfig', (data.moored_timeout_hours || 2) + ' hours');
+    updateElement('cleanupIntervalConfig', formatNumber(data.age_cleanup_interval || 5000));
+    updateElement('statusCleanupEnabled', data.age_cleanup_enabled ? 'Enabled' : 'Disabled');
+}
+
+// Update AIS service config (fallback)
+function updateAISServiceConfig(data) {
+    updateElement('sailingTimeoutConfig', (data.position_max_age_hours * 60 || 120) + ' minutes');
+    updateElement('mooredTimeoutConfig', (data.ship_max_age_hours || 24) + ' hours');
+    updateElement('cleanupIntervalConfig', formatNumber(data.age_cleanup_interval || 1000));
+    updateElement('statusCleanupEnabled', data.auto_cleanup_enabled ? 'Enabled' : 'Disabled');
+}
+
+// Update database maintenance statistics
+function updateDatabaseStats(data) {
+    updateElement('totalPositions', formatNumber(data.total_positions || 0));
+    updateElement('uniqueShips', formatNumber(data.unique_ships || 0));
+    updateElement('duplicatePositions', formatNumber(data.duplicate_positions || 0));
+
+    hideMessage('cleanupMessage');
+}
+
+// Perform status-based cleanup
+async function performStatusCleanup() {
+    const button = document.getElementById('statusCleanupBtn');
+    if (!button) return;
+
+    button.disabled = true;
+    button.textContent = '🧹 Cleaning...';
+
+    try {
+        const response = await fetch('/api/cleanup/age-cleanup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                underway_minutes: 2,
+                moored_hours: 2
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showMessage('positionStatsMessage', result.message, 'success');
+            loadPositionStatistics(); // Refresh stats
+        } else {
+            showMessage('positionStatsMessage', result.message, 'error');
+        }
+
+    } catch (error) {
+        showMessage('positionStatsMessage', 'Cleanup failed: ' + error.message, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = '🧹 Status-Based Cleanup';
+    }
+}
+
+// Perform database cleanup
+async function performDatabaseCleanup() {
+    const button = document.getElementById('cleanupBtn');
+    if (!button) return;
+
+    if (!confirm('This will remove old position records to optimize database performance. Continue?')) {
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = '🧹 Cleaning...';
+
+    try {
+        const response = await fetch('/admin/cleanup-positions', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showMessage('cleanupMessage', result.message, 'success');
+            loadDatabaseStats(); // Refresh stats
+        } else {
+            showMessage('cleanupMessage', result.message, 'error');
+        }
+
+    } catch (error) {
+        showMessage('cleanupMessage', 'Cleanup failed: ' + error.message, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = '🧹 Clean Up Old Records';
+    }
+}
+
+// Enable cleanup buttons when data is loaded
+function enableCleanupButton() {
+    const button = document.getElementById('statusCleanupBtn');
+    if (button) {
+        button.disabled = false;
+    }
+}
+
+function enableDatabaseCleanupButton() {
+    const button = document.getElementById('cleanupBtn');
+    if (button) {
+        button.disabled = false;
+    }
+}
+
+// Show/hide messages
+function showMessage(elementId, message, type) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    element.textContent = message;
+    element.className = `cleanup-message ${type}`;
+    element.style.display = 'block';
+
+    // Auto-hide success messages after 5 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            element.style.display = 'none';
+        }, 5000);
+    }
+}
+
+function hideMessage(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.style.display = 'none';
+    }
 }
 
 // Update element content with null checking
@@ -91,7 +337,7 @@ function showFallbackStats() {
     updateElement('activeShips', 'Loading...');
     updateElement('managedShips', 'Loading...');
     updateElement('dbRecords', 'Loading...');
-    updateElement('dbRecordsCleanup', 'Loading...');
+    updateElement('aisMessageCount', 'Loading...');
 }
 
 // Format numbers with thousand separators
@@ -105,6 +351,8 @@ function startStatisticsRefresh() {
     // Refresh every 30 seconds
     setInterval(() => {
         loadStatistics();
+        loadPositionStatistics();
+        loadAISServiceStatus();
     }, 30000);
 }
 
@@ -257,6 +505,50 @@ function addStatCardAnimations() {
             opacity: 1 !important;
             transform: translateY(0) !important;
         }
+
+        .cleanup-message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .cleanup-message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .cleanup-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .cleanup-btn {
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .cleanup-btn.primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .cleanup-btn.secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .cleanup-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
     `;
     document.head.appendChild(style);
 }
@@ -266,12 +558,16 @@ document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
         // Page became visible, refresh stats
         loadStatistics();
+        loadPositionStatistics();
+        loadAISServiceStatus();
     }
 });
 
 // Handle window focus
 window.addEventListener('focus', function() {
     loadStatistics();
+    loadPositionStatistics();
+    loadAISServiceStatus();
 });
 
 // Utility function for smooth scrolling (if needed)
@@ -308,6 +604,9 @@ window.addEventListener('load', function() {
 // Export functions for potential external use
 window.InfoPage = {
     loadStatistics,
+    loadPositionStatistics,
+    loadAISServiceStatus,
+    loadDatabaseStats,
     updateStatistics,
     smoothScrollTo
 };

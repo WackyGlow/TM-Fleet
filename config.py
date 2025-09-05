@@ -21,19 +21,18 @@ class Config:
     PORT = int(os.environ.get('PORT', 5000))
     DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-    # MULTIPART BUFFER CLEANUP (message-based - still needed)
+    # Cleanup settings
     CLEANUP_INTERVAL_MESSAGES = int(os.environ.get('CLEANUP_INTERVAL_MESSAGES', 1000))
+    DB_CLEANUP_INTERVAL_MESSAGES = int(os.environ.get('DB_CLEANUP_INTERVAL_MESSAGES', 10000))
+    DB_CLEANUP_DAYS = int(os.environ.get('DB_CLEANUP_DAYS', 7))
 
-    # AUTOMATIC DATABASE CLEANUP SETTINGS
-    AUTO_CLEANUP_ENABLED = os.environ.get('AUTO_CLEANUP_ENABLED', 'True').lower() == 'true'
+    # Status-based position cleanup settings
+    STATUS_CLEANUP_INTERVAL_MESSAGES = int(os.environ.get('STATUS_CLEANUP_INTERVAL_MESSAGES', 5000))
+    SAILING_POSITION_TIMEOUT_MINUTES = int(os.environ.get('SAILING_POSITION_TIMEOUT_MINUTES', 2))
+    MOORED_POSITION_TIMEOUT_HOURS = int(os.environ.get('MOORED_POSITION_TIMEOUT_HOURS', 1))
 
-    # Age thresholds for cleanup
-    POSITION_MAX_AGE_HOURS = float(os.environ.get('POSITION_MAX_AGE_HOURS', 2.0))
-    SHIP_MAX_AGE_HOURS = float(os.environ.get('SHIP_MAX_AGE_HOURS', 24.0))
-
-    # Time-based cleanup intervals (in hours)
-    AGE_CLEANUP_INTERVAL_HOURS = float(os.environ.get('AGE_CLEANUP_INTERVAL_HOURS', 1.0))  # Every 1 hour
-    DUPLICATE_CLEANUP_INTERVAL_HOURS = float(os.environ.get('DUPLICATE_CLEANUP_INTERVAL_HOURS', 6.0))  # Every 6 hours
+    # Enable/disable automatic status-based cleanup
+    ENABLE_STATUS_CLEANUP = os.environ.get('ENABLE_STATUS_CLEANUP', 'True').lower() == 'true'
 
 
 class DevelopmentConfig(Config):
@@ -41,11 +40,10 @@ class DevelopmentConfig(Config):
     DEBUG = True
     AIS_UDP_PORT = 15200
 
-    # More aggressive cleanup for development
-    POSITION_MAX_AGE_HOURS = 1.0  # 1 hour in dev
-    SHIP_MAX_AGE_HOURS = 12.0  # 12 hours in dev
-    AGE_CLEANUP_INTERVAL_HOURS = 0.5  # Every 30 minutes in dev
-    DUPLICATE_CLEANUP_INTERVAL_HOURS = 2.0  # Every 2 hours in dev
+    # More frequent cleanup in development for testing
+    STATUS_CLEANUP_INTERVAL_MINUTES = 2  # Every 2 minutes in dev
+    UNDERWAY_POSITION_TIMEOUT_MINUTES = 1  # 1 minute for testing
+    MOORED_POSITION_TIMEOUT_HOURS = 1  # 1 hour
 
 
 class ProductionConfig(Config):
@@ -53,11 +51,10 @@ class ProductionConfig(Config):
     DEBUG = False
     AIS_UDP_PORT = 15100
 
-    # Conservative cleanup for production
-    POSITION_MAX_AGE_HOURS = 2.0  # 2 hours in production
-    SHIP_MAX_AGE_HOURS = 48.0  # 48 hours in production
-    AGE_CLEANUP_INTERVAL_HOURS = 2.0  # Every 2 hours in production
-    DUPLICATE_CLEANUP_INTERVAL_HOURS = 12.0  # Every 12 hours in production
+    # Production cleanup settings
+    STATUS_CLEANUP_INTERVAL_MINUTES = 5  # Every 5 minutes
+    UNDERWAY_POSITION_TIMEOUT_MINUTES = 2
+    MOORED_POSITION_TIMEOUT_HOURS = 2
 
 
 # Configuration mapping

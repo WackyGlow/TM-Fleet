@@ -1,6 +1,6 @@
 import socket
+import threading
 import traceback
-from datetime import datetime, timedelta
 from pyais import decode
 from utils import AISMessageProcessor, MultipartMessageBuffer, NMEAParser
 from database import AISDatabase
@@ -27,20 +27,11 @@ class AISService:
 
         # Track message count for cleanup
         self.message_count = 0
+        self.cleanup_timer = None
 
-        # Track cleanup statistics
-        self.cleanup_stats = {
-            'last_age_cleanup': None,
-            'last_duplicate_cleanup': None,
-            'total_age_cleanups': 0,
-            'total_duplicate_cleanups': 0,
-            'positions_deleted_total': 0,
-            'ships_deleted_total': 0
-        }
-
-        # Track last cleanup times for time-based intervals
-        self.last_age_cleanup_time = None
-        self.last_duplicate_cleanup_time = None
+        # Start time-based position cleanup if enabled
+        if self.app.config.get('ENABLE_STATUS_CLEANUP', True):
+            self._start_position_cleanup_timer()
 
         # Store instance for singleton access
         AISService._instance = self
@@ -49,6 +40,46 @@ class AISService:
     def get_instance(cls):
         """Get the current AIS service instance."""
         return cls._instance
+
+    def _start_position_cleanup_timer(self):
+        """Start the time-based position cleanup timer."""
+        interval_minutes = self.app.config.get('STATUS_CLEANUP_INTERVAL_MINUTES', 5)
+
+        def run_cleanup():
+            try:
+                underway_minutes = self.app.config.get('UNDERWAY_POSITION_TIMEOUT_MINUTES', 2)
+                moored_hours = self.app.config.get('MOORED_POSITION_TIMEOUT_HOURS', 2)
+
+                with self.app.app_context():
+                    print(f"⏰ Running scheduled position cleanup...")
+                    stats = AISDatabase.cleanup_old_positions_by_navigation(
+                        underway_minutes=underway_minutes,
+                        moored_hours=moored_hours
+                    )
+
+                    if stats.get('underway_positions_deleted', 0) > 0 or stats.get('moored_positions_deleted', 0) > 0:
+                        total_deleted = stats.get('underway_positions_deleted', 0) + stats.get(
+                            'moored_positions_deleted', 0)
+                        print(f"✅ Scheduled cleanup removed {total_deleted} old positions")
+
+            except Exception as e:
+                print(f"❌ Error in scheduled position cleanup: {e}")
+            finally:
+                # Schedule next cleanup
+                if self.app.config.get('ENABLE_STATUS_CLEANUP', True):
+                    self._start_position_cleanup_timer()
+
+        print(f"⏰ Scheduling position cleanup every {interval_minutes} minutes")
+        self.cleanup_timer = threading.Timer(interval_minutes * 60.0, run_cleanup)
+        self.cleanup_timer.daemon = True
+        self.cleanup_timer.start()
+
+    def stop_position_cleanup_timer(self):
+        """Stop the position cleanup timer."""
+        if self.cleanup_timer and self.cleanup_timer.is_alive():
+            self.cleanup_timer.cancel()
+            print("⏰ Position cleanup timer stopped")
+        self.cleanup_timer = None
 
     def _get_tracked_mmsis(self):
         """Get current tracked MMSIs from database."""
@@ -71,17 +102,17 @@ class AISService:
             print(f"✅ UDP listener successfully bound to 0.0.0.0:{port}")
             print(f"🔍 Waiting for AIS data on port {port}...")
 
-            # Print cleanup configuration
-            if self.app.config.get('AUTO_CLEANUP_ENABLED', True):
-                print(f"🧹 Automatic cleanup enabled:")
-                print(
-                    f"   - Position records older than {self.app.config.get('POSITION_MAX_AGE_HOURS', 2)}h will be deleted")
-                print(f"   - Ship records older than {self.app.config.get('SHIP_MAX_AGE_HOURS', 24)}h will be deleted")
-                print(f"   - Age-based cleanup every {self.app.config.get('AGE_CLEANUP_INTERVAL_HOURS', 1)} hours")
-                print(
-                    f"   - Duplicate cleanup every {self.app.config.get('DUPLICATE_CLEANUP_INTERVAL_HOURS', 6)} hours")
+            # Print cleanup settings
+            if self.app.config.get('ENABLE_STATUS_CLEANUP', True):
+                interval_minutes = self.app.config.get('STATUS_CLEANUP_INTERVAL_MINUTES', 5)
+                underway_timeout = self.app.config.get('UNDERWAY_POSITION_TIMEOUT_MINUTES', 2)
+                moored_timeout = self.app.config.get('MOORED_POSITION_TIMEOUT_HOURS', 2)
+                print(f"🧹 Time-based position cleanup enabled:")
+                print(f"   - Cleanup interval: every {interval_minutes} minutes")
+                print(f"   - Underway ships: {underway_timeout} minutes")
+                print(f"   - Moored ships: {moored_timeout} hours")
             else:
-                print("🚫 Automatic cleanup disabled")
+                print("⚠️ Time-based position cleanup disabled")
 
             # Listen for messages
             while True:
@@ -151,125 +182,32 @@ class AISService:
                     decoded_message,
                     self.app.app_context
                 )
-                # Trigger time-based cleanup after successful message processing
-                self._trigger_automatic_cleanup()
         except Exception as decode_error:
             print(f"❌ Message decode error: {decode_error}")
 
     def _update_message_count(self):
-        """Update message count and perform periodic cleanup of old fragments only."""
+        """Update message count and perform periodic cleanup."""
         self.message_count += 1
 
-        cleanup_interval = self.app.config.get('CLEANUP_INTERVAL_MESSAGES', 1000)
+        cleanup_interval = self.app.config['CLEANUP_INTERVAL_MESSAGES']
 
         # Periodic cleanup of old fragments only
         if self.message_count % cleanup_interval == 0:
             self.multipart_buffer.cleanup_old_fragments()
 
-    def _trigger_automatic_cleanup(self):
-        """Trigger automatic age-based cleanup after successful AIS message processing."""
-        # Check if automatic cleanup is enabled
-        if not self.app.config.get('AUTO_CLEANUP_ENABLED', True):
-            return
-
-        current_time = datetime.now()
-
-        # Get time intervals from config (in hours)
-        age_cleanup_interval_hours = self.app.config.get('AGE_CLEANUP_INTERVAL_HOURS', 1.0)
-        duplicate_cleanup_interval_hours = self.app.config.get('DUPLICATE_CLEANUP_INTERVAL_HOURS', 6.0)
-
-        # Age-based cleanup - time-based
-        if (self.last_age_cleanup_time is None or
-                (current_time - self.last_age_cleanup_time).total_seconds() >= age_cleanup_interval_hours * 3600):
-            self._perform_age_based_cleanup()
-            self.last_age_cleanup_time = current_time
-
-        # Duplicate cleanup - time-based, less frequent
-        if (self.last_duplicate_cleanup_time is None or
-                (
-                        current_time - self.last_duplicate_cleanup_time).total_seconds() >= duplicate_cleanup_interval_hours * 3600):
-            self._perform_duplicate_cleanup()
-            self.last_duplicate_cleanup_time = current_time
-
-    def _perform_age_based_cleanup(self):
-        """Perform age-based cleanup of old records."""
-        try:
-            position_max_age = self.app.config.get('POSITION_MAX_AGE_HOURS', 2.0)
-            ship_max_age = self.app.config.get('SHIP_MAX_AGE_HOURS', 24.0)
-
-            print(f"🧹 Performing age-based cleanup (positions >{position_max_age}h, ships >{ship_max_age}h)...")
-
-            with self.app.app_context():
-                result = AISDatabase.cleanup_old_data_by_age(
-                    position_hours=position_max_age,
-                    ship_hours=ship_max_age
-                )
-
-                if result.get('error'):
-                    print(f"❌ Age-based cleanup error: {result['error']}")
-                else:
-                    positions_deleted = result.get('positions_deleted', 0)
-                    ships_deleted = result.get('ships_deleted', 0)
-
-                    # Update statistics
-                    self.cleanup_stats['last_age_cleanup'] = result.get('positions_cutoff')
-                    self.cleanup_stats['total_age_cleanups'] += 1
-                    self.cleanup_stats['positions_deleted_total'] += positions_deleted
-                    self.cleanup_stats['ships_deleted_total'] += ships_deleted
-
-                    if positions_deleted > 0 or ships_deleted > 0:
-                        print(f"✅ Age-based cleanup: {positions_deleted} positions, {ships_deleted} ships deleted")
-
-        except Exception as e:
-            print(f"❌ Error during age-based cleanup: {e}")
-
-    def _perform_duplicate_cleanup(self):
-        """Perform duplicate position cleanup."""
-        try:
-            print(f"🧹 Performing duplicate position cleanup...")
-
-            with self.app.app_context():
-                deleted_count = AISDatabase.cleanup_old_positions()
-
-                # Update statistics
-                current_time = datetime.now()
-                self.cleanup_stats['last_duplicate_cleanup'] = current_time.isoformat()
-                self.cleanup_stats['total_duplicate_cleanups'] += 1
-
-                if deleted_count > 0:
-                    print(f"✅ Duplicate cleanup: {deleted_count} duplicate records removed")
-
-        except Exception as e:
-            print(f"❌ Error during duplicate cleanup: {e}")
-
     def get_stats(self):
         """Get service statistics."""
+        timer_active = False
+        if hasattr(self, 'cleanup_timer') and self.cleanup_timer:
+            try:
+                timer_active = self.cleanup_timer.is_alive()
+            except (AttributeError, RuntimeError):
+                timer_active = False
+
         return {
             "ships_count": len(self.ships),
             "details_count": len(self.ship_details),
             "message_count": self.message_count,
-            "buffer_stats": self.multipart_buffer.get_stats(),
-            "cleanup_stats": self.cleanup_stats.copy()
+            "cleanup_timer_active": timer_active,
+            "buffer_stats": self.multipart_buffer.get_stats()
         }
-
-    def get_cleanup_status(self):
-        """Get detailed cleanup status information."""
-        with self.app.app_context():
-            # Get current old data stats
-            position_max_age = self.app.config.get('POSITION_MAX_AGE_HOURS', 2.0)
-            ship_max_age = self.app.config.get('SHIP_MAX_AGE_HOURS', 24.0)
-            old_data_stats = AISDatabase.get_old_data_stats(position_max_age, ship_max_age)
-
-            # Get duplicate stats
-            duplicate_stats = AISDatabase.get_cleanup_stats()
-
-            return {
-                'auto_cleanup_enabled': self.app.config.get('AUTO_CLEANUP_ENABLED', True),
-                'position_max_age_hours': position_max_age,
-                'ship_max_age_hours': ship_max_age,
-                'age_cleanup_interval': self.app.config.get('AGE_CLEANUP_INTERVAL_HOURS', 1.0),
-                'duplicate_cleanup_interval': self.app.config.get('DUPLICATE_CLEANUP_INTERVAL_HOURS', 6.0),
-                'old_data_stats': old_data_stats,
-                'duplicate_stats': duplicate_stats,
-                'cleanup_history': self.cleanup_stats.copy()
-            }
