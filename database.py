@@ -173,8 +173,8 @@ class AISDatabase:
             return False
 
     @staticmethod
-    def get_recent_ships(hours=24):
-        """Get ships with recent positions based on navigation status - smart filtering."""
+    def get_recent_ships():
+        """Get ships with recent positions based on navigation status - ships never deleted, only hidden."""
         current_time = datetime.now(UTC)
 
         # Different timeouts based on nav status
@@ -227,12 +227,12 @@ class AISDatabase:
             return [position.to_dict()]
         return []
 
-    # POSITION CLEANUP METHODS - Ships are never deleted, only position records
+    # POSITION CLEANUP METHODS - Ships are NEVER deleted
     @staticmethod
-    def cleanup_old_positions_by_nav_status(underway_minutes=2, moored_hours=2):
+    def cleanup_old_positions_by_navigation(underway_minutes=2, moored_hours=2):
         """
         Remove old position records based on navigation status.
-        Ships themselves are NEVER deleted - only position records.
+        Ships themselves are NEVER deleted.
 
         Args:
             underway_minutes: Delete position records for moving ships older than this many minutes
@@ -309,7 +309,7 @@ class AISDatabase:
     def cleanup_old_positions(days=7):
         """
         Remove old position records, keeping only the most recent one per ship.
-        This is useful for duplicate cleanup.
+        This is useful for one-time cleanup of duplicates.
         """
         try:
             # Count before cleanup
@@ -349,7 +349,7 @@ class AISDatabase:
     def get_old_position_stats(underway_minutes=2, moored_hours=2):
         """
         Get statistics about old position records that would be cleaned up.
-        Ships are never deleted, only position records.
+        Ships are never counted for deletion.
 
         Args:
             underway_minutes: Minutes threshold for underway ship positions
@@ -410,27 +410,15 @@ class AISDatabase:
             position_count = Position.query.count()
             tracked_count = TrackedShip.query.count()
 
-            # Active ships based on navigation status and position age
-            current_time = datetime.now(UTC)
-            underway_cutoff = current_time - timedelta(minutes=2)
-            moored_cutoff = current_time - timedelta(hours=2)
-
-            # Count active ships (ships with fresh positions based on nav status)
-            active_underway = db.session.query(Ship).join(Position).filter(
-                Position.timestamp > underway_cutoff,
-                ~Position.nav_status.in_([1, 5, 6])
-            ).count()
-
-            active_moored = db.session.query(Ship).join(Position).filter(
-                Position.timestamp > moored_cutoff,
-                Position.nav_status.in_([1, 5, 6])
-            ).count()
+            # Active ships in last hour
+            cutoff = datetime.now(UTC) - timedelta(hours=1)
+            active_ships = Ship.query.filter(Ship.last_seen > cutoff).count()
 
             return {
                 'total_ships': ship_count,
                 'total_positions': position_count,
                 'tracked_ships': tracked_count,
-                'active_ships_smart': active_underway + active_moored
+                'active_ships_last_hour': active_ships
             }
 
         except Exception as e:
@@ -439,7 +427,7 @@ class AISDatabase:
 
     @staticmethod
     def get_cleanup_stats():
-        """Get statistics about position records that could be cleaned up."""
+        """Get statistics about duplicate position records that could be cleaned up."""
         try:
             total_positions = Position.query.count()
             unique_ships = db.session.query(Position.mmsi).distinct().count()
