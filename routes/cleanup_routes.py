@@ -75,8 +75,11 @@ def register_cleanup_routes(app):
                 "status_cleanup_interval_minutes": app.config.get('STATUS_CLEANUP_INTERVAL_MINUTES', 5),
                 "message_cleanup_interval": app.config.get('CLEANUP_INTERVAL_MESSAGES', 1000),
 
-                # Estimated values (since we don't track these specifically)
-                "last_age_cleanup_at_message": 0  # This would require adding tracking to the service
+                # New: actual tracking values
+                "last_age_cleanup_at_message": getattr(ais_service, "last_cleanup_message_count", 0),
+                "last_status_cleanup_time": getattr(ais_service, "last_cleanup_time", None),
+                "next_status_cleanup_time": getattr(ais_service, "next_cleanup_time", None),
+                "last_status_cleanup_success": getattr(ais_service, "last_cleanup_success", False),
             }
 
             return jsonify(config_data)

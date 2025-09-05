@@ -27,9 +27,9 @@ class Config:
     DB_CLEANUP_DAYS = int(os.environ.get('DB_CLEANUP_DAYS', 7))
 
     # Status-based position cleanup settings
-    STATUS_CLEANUP_INTERVAL_MESSAGES = int(os.environ.get('STATUS_CLEANUP_INTERVAL_MESSAGES', 5000))
-    SAILING_POSITION_TIMEOUT_MINUTES = int(os.environ.get('SAILING_POSITION_TIMEOUT_MINUTES', 2))
+    UNDERWAY_POSITION_TIMEOUT_MINUTES = int(os.environ.get('UNDERWAY_POSITION_TIMEOUT_MINUTES', 2))
     MOORED_POSITION_TIMEOUT_HOURS = int(os.environ.get('MOORED_POSITION_TIMEOUT_HOURS', 1))
+    STATUS_CLEANUP_INTERVAL_MINUTES = int(os.environ.get('STATUS_CLEANUP_INTERVAL_MINUTES', 5))
 
     # Enable/disable automatic status-based cleanup
     ENABLE_STATUS_CLEANUP = os.environ.get('ENABLE_STATUS_CLEANUP', 'True').lower() == 'true'

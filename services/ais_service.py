@@ -1,6 +1,8 @@
 import socket
 import threading
 import traceback
+from datetime import datetime, UTC, timedelta
+
 from pyais import decode
 from utils import AISMessageProcessor, MultipartMessageBuffer, NMEAParser
 from database import AISDatabase
@@ -16,6 +18,9 @@ class AISService:
         self.app = app
         self.ships = {}  # Real-time ship positions
         self.ship_details = {}  # Detailed ship information
+        self.last_cleanup_time = None
+        self.last_cleanup_success = False
+        self.next_cleanup_time = None
 
         # Initialize AIS processing components
         self.multipart_buffer = MultipartMessageBuffer()
@@ -57,10 +62,15 @@ class AISService:
                         moored_hours=moored_hours
                     )
 
+                    self.last_cleanup_time = datetime.now(UTC).isoformat()
+                    self.last_cleanup_success = True
+                    self.next_cleanup_time = (datetime.now(UTC) + timedelta(minutes=interval_minutes)).isoformat()
+
                     if stats.get('underway_positions_deleted', 0) > 0 or stats.get('moored_positions_deleted', 0) > 0:
                         total_deleted = stats.get('underway_positions_deleted', 0) + stats.get(
                             'moored_positions_deleted', 0)
                         print(f"✅ Scheduled cleanup removed {total_deleted} old positions")
+
 
             except Exception as e:
                 print(f"❌ Error in scheduled position cleanup: {e}")

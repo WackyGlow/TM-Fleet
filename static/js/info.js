@@ -1,10 +1,8 @@
-// Info Page JavaScript
-// Handles statistics loading and dynamic content for the about page
-
 // Initialize page when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     initializeInfoPage();
 });
+
 
 // Initialize the info page
 function initializeInfoPage() {
@@ -155,15 +153,105 @@ function updatePositionStatistics(data) {
     hideMessage('positionStatsMessage');
 }
 
+let cleanupCountdownTimer = null;
+let cleanupState = { target: null, token: null };
+
 // Update AIS service status
-function updateAISServiceStatus(data) {
-    updateElement('messageCount', formatNumber(data.messages_processed || 0));
-    updateElement('lastStatusCleanup', formatNumber(data.last_age_cleanup_at_message || 0));
-    updateElement('sailingTimeoutConfig', (data.underway_timeout_minutes || 2) + ' minutes');
-    updateElement('mooredTimeoutConfig', (data.moored_timeout_hours || 2) + ' hours');
-    updateElement('cleanupIntervalConfig', formatNumber(data.age_cleanup_interval || 5000));
-    updateElement('statusCleanupEnabled', data.age_cleanup_enabled ? 'Enabled' : 'Disabled');
+function updateAISServiceStatus(data = {}) {
+    // single global state (no top-level lets)
+    if (!window.cleanupState) window.cleanupState = { timer: null, target: null, token: null };
+    const S = window.cleanupState;
+
+    // basic stats
+    updateElement('messageCount', formatNumber(num(data.messages_processed, 0)));
+
+    // config (supports old/new keys)
+    const enabled = bool(data.status_cleanup_enabled, data.age_cleanup_enabled, false);
+    const active  = !!data.cleanup_timer_active;
+    const intervalMin = num(data.status_cleanup_interval_minutes, 0);
+
+    updateElement('sailingTimeoutConfig', pluralize(num(data.underway_timeout_minutes, 2), 'minute'));
+    updateElement('mooredTimeoutConfig',  pluralize(num(data.moored_timeout_hours, 2), 'hour'));
+    updateElement('cleanupIntervalConfig',
+        intervalMin > 0 ? pluralize(intervalMin, 'minute') : formatNumber(num(data.age_cleanup_interval, 0))
+    );
+    updateElement('statusCleanupEnabled', enabled ? 'Enabled' : 'Disabled');
+
+    // last cleanup text (priority: time → msg → scheduled → never)
+    const lastISO = data.last_status_cleanup_time;
+    const lastMsg = num(data.last_age_cleanup_at_message, 0);
+    if (lastISO) {
+        const t = new Date(lastISO).toLocaleTimeString();
+        updateElement('lastStatusCleanup', `${t} | ${data.last_status_cleanup_success ? '✅ Success' : '❌ Failed'}`);
+    } else if (lastMsg > 0) {
+        updateElement('lastStatusCleanup', `at message ${formatNumber(lastMsg)}`);
+    } else {
+        updateElement('lastStatusCleanup', enabled && active ? 'Scheduled (no runs yet)' : 'Never');
+    }
+
+    // next cleanup (countdown)
+    if (!(enabled && active && intervalMin > 0)) {
+        stopCountdown(S);
+        updateElement('nextStatusCleanup', 'Not scheduled');
+        S.target = null; S.token = null;
+        return;
+    }
+
+    // prefer backend next time; else last+interval; else keep previous; else now+interval
+    let target =
+        data.next_status_cleanup_time ? new Date(data.next_status_cleanup_time) :
+        lastISO ? new Date(new Date(lastISO).getTime() + intervalMin * 60000) :
+        (S.target || new Date(Date.now() + intervalMin * 60000));
+
+    // clamp past/near-past to avoid “Due now” flicker
+    if (target.getTime() - Date.now() <= 1500) {
+        target = new Date(Date.now() + intervalMin * 60000);
+    }
+
+    // restart countdown only if meaningful change (new token or >1s drift)
+    const token = (lastISO || '') + '|' + intervalMin;
+    const changed = !S.target || Math.abs(target - S.target) > 1000 || token !== S.token;
+    if (changed) {
+        S.target = target; S.token = token;
+        startCountdown(S, target);
+    }
 }
+
+/* ── tiny helpers (no globals) ───────────────────────── */
+
+function num(v, fallback) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function bool(a, b, fallback) {
+    if (typeof a === 'boolean') return a;
+    if (typeof b === 'boolean') return b;
+    return !!fallback;
+}
+
+function pluralize(value, unit) {
+    const n = num(value, 0);
+    return `${n} ${unit}${n === 1 ? '' : 's'}`;
+}
+
+function startCountdown(S, targetDate) {
+    stopCountdown(S);
+    function tick() {
+        const diff = targetDate.getTime() - Date.now();
+        if (diff <= 1500) { updateElement('nextStatusCleanup', 'Due now'); return; }
+        const m = Math.floor(diff / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        updateElement('nextStatusCleanup', `in ${m}m ${s}s`);
+    }
+    tick();
+    S.timer = setInterval(tick, 1000);
+}
+
+function stopCountdown(S) {
+    if (S.timer) { clearInterval(S.timer); S.timer = null; }
+}
+
 
 // Update AIS service config (fallback)
 function updateAISServiceConfig(data) {
@@ -595,6 +683,26 @@ function logPerformanceMetrics() {
         }
     }
 }
+
+function startCleanupCountdown(nextTime) {
+    function updateCountdown() {
+        const now = new Date();
+        const diffMs = nextTime - now;
+
+        if (diffMs <= 0) {
+            updateElement('nextStatusCleanup', 'Due now');
+            return;
+        }
+
+        const minutes = Math.floor(diffMs / 60000);
+        const seconds = Math.floor((diffMs % 60000) / 1000);
+        updateElement('nextStatusCleanup', `in ${minutes}m ${seconds}s`);
+    }
+
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+}
+
 
 // Log performance metrics when page is fully loaded
 window.addEventListener('load', function() {
