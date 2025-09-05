@@ -12,11 +12,11 @@ def register_cleanup_routes(app):
 
     @app.route("/api/cleanup/age-stats")
     def get_age_cleanup_stats():
-        """Get statistics about old data that can be cleaned up by age."""
-        position_hours = float(request.args.get('position_hours', app.config.get('POSITION_MAX_AGE_HOURS', 2.0)))
-        ship_hours = float(request.args.get('ship_hours', app.config.get('SHIP_MAX_AGE_HOURS', 24.0)))
+        """Return detailed stats for the Position Data Statistics UI."""
+        underway_minutes = int(request.args.get('underway_minutes', 2))
+        moored_hours = int(request.args.get('moored_hours', 1))
 
-        stats = AISDatabase.get_old_position_stats(position_hours, ship_hours)
+        stats = AISDatabase.get_position_age_stats(underway_minutes, moored_hours)
         return jsonify(stats)
 
     @app.route("/api/cleanup/age-cleanup", methods=["POST"])
