@@ -1,21 +1,48 @@
-// Info Page JavaScript
-// Handles statistics loading, cleanup functionality, and dynamic content for the about page
-
 // Initialize page when DOM is loaded
 document.addEventListener('DOMContentLoaded', function() {
     initializeInfoPage();
 });
 
+
 // Initialize the info page
 function initializeInfoPage() {
     loadStatistics();
-    loadCleanupStats();
+    loadPositionStatistics();
+    loadAISServiceStatus();
+    loadDatabaseStats();
+    setupEventListeners();
     startStatisticsRefresh();
     addInteractiveEffects();
-    setupCleanupHandlers();
 }
 
-// Load system statistics
+// Setup event listeners for buttons
+function setupEventListeners() {
+    // Position Stats button
+    const refreshPositionBtn = document.getElementById('refreshPositionStatsBtn');
+    if (refreshPositionBtn) {
+        refreshPositionBtn.addEventListener('click', loadPositionStatistics);
+    }
+
+    // Status cleanup button
+    const statusCleanupBtn = document.getElementById('statusCleanupBtn');
+    if (statusCleanupBtn) {
+        statusCleanupBtn.addEventListener('click', performStatusCleanup);
+    }
+
+    // Database refresh button
+    const refreshStatsBtn = document.getElementById('refreshStatsBtn');
+    if (refreshStatsBtn) {
+        refreshStatsBtn.addEventListener('click', loadDatabaseStats);
+    }
+
+    // Database cleanup button
+    const cleanupBtn = document.getElementById('cleanupBtn');
+    if (cleanupBtn) {
+        cleanupBtn.addEventListener('click', performDatabaseCleanup);
+    }
+}
+
+// Load basic system statistics
 async function loadStatistics() {
     try {
         // Load database statistics
@@ -30,132 +57,58 @@ async function loadStatistics() {
     }
 }
 
-// Load cleanup statistics
-async function loadCleanupStats() {
+// Load position statistics for cleanup analysis
+async function loadPositionStatistics() {
+    try {
+        const response = await fetch('/api/cleanup/age-stats');
+        const data = await response.json();
+
+        updatePositionStatistics(data);
+        enableCleanupButton();
+
+    } catch (error) {
+        console.error('Error loading position statistics:', error);
+        showMessage('positionStatsMessage', 'Error loading position statistics: ' + error.message, 'error');
+    }
+}
+
+// Load AIS service status
+async function loadAISServiceStatus() {
+    try {
+        const response = await fetch('/api/cleanup/status');
+        const data = await response.json();
+
+        updateAISServiceStatus(data);
+
+    } catch (error) {
+        console.error('Error loading AIS service status:', error);
+        // Try fallback config endpoint
+        try {
+            const configResponse = await fetch('/api/cleanup/config');
+            const configData = await configResponse.json();
+            updateAISServiceConfig(configData);
+        } catch (configError) {
+            console.error('Error loading AIS config:', configError);
+        }
+    }
+}
+
+// Load database maintenance statistics
+async function loadDatabaseStats() {
     try {
         const response = await fetch('/admin/cleanup-stats');
-        const stats = await response.json();
+        const data = await response.json();
 
-        updateCleanupStats(stats);
-
-    } catch (error) {
-        console.error('Error loading cleanup stats:', error);
-        showCleanupError('Failed to load cleanup statistics');
-    }
-}
-
-// Update cleanup statistics in UI
-function updateCleanupStats(stats) {
-    updateElement('totalPositions', formatNumber(stats.total_positions || 0));
-    updateElement('uniqueShips', formatNumber(stats.unique_ships || 0));
-    updateElement('duplicatePositions', formatNumber(stats.duplicate_positions || 0));
-
-    // Enable/disable cleanup button based on whether cleanup is needed
-    const cleanupBtn = document.getElementById('cleanupBtn');
-    if (stats.cleanup_needed) {
-        cleanupBtn.disabled = false;
-        cleanupBtn.textContent = `🧹 Clean Up ${formatNumber(stats.duplicate_positions)} Records`;
-        showCleanupMessage(`${formatNumber(stats.duplicate_positions)} duplicate position records can be cleaned up`, 'warning');
-    } else {
-        cleanupBtn.disabled = true;
-        cleanupBtn.textContent = '✅ Database Optimized';
-        showCleanupMessage('Database is already optimized - no cleanup needed', 'success');
-    }
-}
-
-// Setup cleanup button handlers
-function setupCleanupHandlers() {
-    const refreshBtn = document.getElementById('refreshStatsBtn');
-    const cleanupBtn = document.getElementById('cleanupBtn');
-
-    refreshBtn.addEventListener('click', handleRefreshStats);
-    cleanupBtn.addEventListener('click', handleCleanup);
-}
-
-// Handle refresh stats button click
-async function handleRefreshStats() {
-    const btn = document.getElementById('refreshStatsBtn');
-    setButtonLoading(btn, true);
-
-    try {
-        await loadCleanupStats();
-        showCleanupMessage('Statistics refreshed successfully', 'success');
-    } catch (error) {
-        showCleanupError('Failed to refresh statistics');
-    } finally {
-        setButtonLoading(btn, false);
-    }
-}
-
-// Handle cleanup button click
-async function handleCleanup() {
-    // Confirm with user
-    const duplicates = document.getElementById('duplicatePositions').textContent;
-    if (!confirm(`Are you sure you want to clean up ${duplicates} duplicate position records?\n\nThis will:\n• Keep the most recent position for each ship\n• Remove all older position records\n• Free up database space\n\nThis action cannot be undone.`)) {
-        return;
-    }
-
-    const btn = document.getElementById('cleanupBtn');
-    setButtonLoading(btn, true);
-
-    try {
-        const response = await fetch('/admin/cleanup-positions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const result = await response.json();
-
-        if (result.success) {
-            showCleanupMessage(result.message, 'success');
-            // Refresh stats to show updated numbers
-            await loadCleanupStats();
-            await loadStatistics(); // Refresh main stats too
-        } else {
-            showCleanupError(result.message);
-        }
+        updateDatabaseStats(data);
+        enableDatabaseCleanupButton();
 
     } catch (error) {
-        showCleanupError('Failed to perform cleanup operation');
-    } finally {
-        setButtonLoading(btn, false);
+        console.error('Error loading database stats:', error);
+        showMessage('cleanupMessage', 'Error loading database statistics: ' + error.message, 'error');
     }
 }
 
-// Show cleanup message
-function showCleanupMessage(message, type = 'success') {
-    const messageEl = document.getElementById('cleanupMessage');
-    messageEl.textContent = message;
-    messageEl.className = `cleanup-message ${type}`;
-    messageEl.style.display = 'block';
-
-    // Auto-hide after 10 seconds for success messages
-    if (type === 'success') {
-        setTimeout(() => {
-            messageEl.style.display = 'none';
-        }, 10000);
-    }
-}
-
-// Show cleanup error
-function showCleanupError(message) {
-    showCleanupMessage('❌ ' + message, 'error');
-}
-
-// Set button loading state
-function setButtonLoading(button, loading) {
-    if (loading) {
-        button.classList.add('loading');
-        button.disabled = true;
-    } else {
-        button.classList.remove('loading');
-        button.disabled = false;
-    }
-}
-
-// Update statistics in the UI
+// Update basic statistics in the UI
 function updateStatistics(stats) {
     // Hero section stats
     updateElement('totalShips', formatNumber(stats.total_ships || 0));
@@ -165,9 +118,266 @@ function updateStatistics(stats) {
     // Technical section stats
     const totalRecords = (stats.total_ships || 0) + (stats.total_positions || 0);
     updateElement('dbRecords', formatNumber(totalRecords));
+    updateElement('aisMessageCount', formatNumber(stats.total_positions || 0));
 
     // Add visual feedback for loaded stats
     animateStatCards();
+}
+
+// Update position statistics
+function updatePositionStatistics(data) {
+    if (data.error) {
+        showMessage('positionStatsMessage', 'Error: ' + data.error, 'error');
+        return;
+    }
+
+    // Sailing ships data
+    updateElement('sailingShips', formatNumber(data.underway_ships || 0));
+    updateElement('sailingPositions', formatNumber(data.underway_total_positions || 0));
+    updateElement('sailingOldPositions', formatNumber(data.old_underway_positions || 0));
+
+    // Moored ships data
+    updateElement('mooredShips', formatNumber(data.moored_ships || 0));
+    updateElement('mooredPositions', formatNumber(data.moored_total_positions || 0));
+    updateElement('mooredOldPositions', formatNumber(data.old_moored_positions || 0));
+
+    // Unknown status data
+    updateElement('unknownPositions', formatNumber(data.unknown_total_positions || 0));
+    updateElement('unknownOldPositions', formatNumber(data.unknown_old_positions || 0));
+
+    // Total cleanup candidates
+    const totalCleanup = (data.underway_old_positions || 0) + (data.moored_old_positions || 0) + (data.unknown_old_positions || 0);
+    updateElement('cleanupCandidates', formatNumber(totalCleanup));
+
+    // Show success message
+    hideMessage('positionStatsMessage');
+}
+
+let cleanupCountdownTimer = null;
+let cleanupState = { target: null, token: null };
+
+// Update AIS service status
+function updateAISServiceStatus(data = {}) {
+    // single global state (no top-level lets)
+    if (!window.cleanupState) window.cleanupState = { timer: null, target: null, token: null };
+    const S = window.cleanupState;
+
+    // basic stats
+    updateElement('messageCount', formatNumber(num(data.messages_processed, 0)));
+
+    // config (supports old/new keys)
+    const enabled = bool(data.status_cleanup_enabled, data.age_cleanup_enabled, false);
+    const active  = !!data.cleanup_timer_active;
+    const intervalMin = num(data.status_cleanup_interval_minutes, 0);
+
+    updateElement('sailingTimeoutConfig', pluralize(num(data.underway_timeout_minutes, 2), 'minute'));
+    updateElement('mooredTimeoutConfig',  pluralize(num(data.moored_timeout_hours, 2), 'hour'));
+    updateElement('cleanupIntervalConfig',
+        intervalMin > 0 ? pluralize(intervalMin, 'minute') : formatNumber(num(data.age_cleanup_interval, 0))
+    );
+    updateElement('statusCleanupEnabled', enabled ? 'Enabled' : 'Disabled');
+
+    // last cleanup text (priority: time → msg → scheduled → never)
+    const lastISO = data.last_status_cleanup_time;
+    const lastMsg = num(data.last_age_cleanup_at_message, 0);
+    if (lastISO) {
+        const t = new Date(lastISO).toLocaleTimeString();
+        updateElement('lastStatusCleanup', `${t} | ${data.last_status_cleanup_success ? '✅ Success' : '❌ Failed'}`);
+    } else if (lastMsg > 0) {
+        updateElement('lastStatusCleanup', `at message ${formatNumber(lastMsg)}`);
+    } else {
+        updateElement('lastStatusCleanup', enabled && active ? 'Scheduled (no runs yet)' : 'Never');
+    }
+
+    // next cleanup (countdown)
+    if (!(enabled && active && intervalMin > 0)) {
+        stopCountdown(S);
+        updateElement('nextStatusCleanup', 'Not scheduled');
+        S.target = null; S.token = null;
+        return;
+    }
+
+    // prefer backend next time; else last+interval; else keep previous; else now+interval
+    let target =
+        data.next_status_cleanup_time ? new Date(data.next_status_cleanup_time) :
+        lastISO ? new Date(new Date(lastISO).getTime() + intervalMin * 60000) :
+        (S.target || new Date(Date.now() + intervalMin * 60000));
+
+    // clamp past/near-past to avoid “Due now” flicker
+    if (target.getTime() - Date.now() <= 1500) {
+        target = new Date(Date.now() + intervalMin * 60000);
+    }
+
+    // restart countdown only if meaningful change (new token or >1s drift)
+    const token = (lastISO || '') + '|' + intervalMin;
+    const changed = !S.target || Math.abs(target - S.target) > 1000 || token !== S.token;
+    if (changed) {
+        S.target = target; S.token = token;
+        startCountdown(S, target);
+    }
+}
+
+/* ── tiny helpers (no globals) ───────────────────────── */
+
+function num(v, fallback) {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : fallback;
+}
+
+function bool(a, b, fallback) {
+    if (typeof a === 'boolean') return a;
+    if (typeof b === 'boolean') return b;
+    return !!fallback;
+}
+
+function pluralize(value, unit) {
+    const n = num(value, 0);
+    return `${n} ${unit}${n === 1 ? '' : 's'}`;
+}
+
+function startCountdown(S, targetDate) {
+    stopCountdown(S);
+    function tick() {
+        const diff = targetDate.getTime() - Date.now();
+        if (diff <= 1500) { updateElement('nextStatusCleanup', 'Due now'); return; }
+        const m = Math.floor(diff / 60000);
+        const s = Math.floor((diff % 60000) / 1000);
+        updateElement('nextStatusCleanup', `in ${m}m ${s}s`);
+    }
+    tick();
+    S.timer = setInterval(tick, 1000);
+}
+
+function stopCountdown(S) {
+    if (S.timer) { clearInterval(S.timer); S.timer = null; }
+}
+
+
+// Update AIS service config (fallback)
+function updateAISServiceConfig(data) {
+    updateElement('sailingTimeoutConfig', (data.position_max_age_hours * 60 || 120) + ' minutes');
+    updateElement('mooredTimeoutConfig', (data.ship_max_age_hours || 24) + ' hours');
+    updateElement('cleanupIntervalConfig', formatNumber(data.age_cleanup_interval || 1000));
+    updateElement('statusCleanupEnabled', data.auto_cleanup_enabled ? 'Enabled' : 'Disabled');
+}
+
+// Update database maintenance statistics
+function updateDatabaseStats(data) {
+    updateElement('totalPositions', formatNumber(data.total_positions || 0));
+    updateElement('uniqueShips', formatNumber(data.unique_ships || 0));
+    updateElement('duplicatePositions', formatNumber(data.duplicate_positions || 0));
+
+    hideMessage('cleanupMessage');
+}
+
+// Perform status-based cleanup
+async function performStatusCleanup() {
+    const button = document.getElementById('statusCleanupBtn');
+    if (!button) return;
+
+    button.disabled = true;
+    button.textContent = '🧹 Cleaning...';
+
+    try {
+        const response = await fetch('/api/cleanup/age-cleanup', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                underway_minutes: 2,
+                moored_hours: 2
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showMessage('positionStatsMessage', result.message, 'success');
+            loadPositionStatistics(); // Refresh stats
+        } else {
+            showMessage('positionStatsMessage', result.message, 'error');
+        }
+
+    } catch (error) {
+        showMessage('positionStatsMessage', 'Cleanup failed: ' + error.message, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = '🧹 Status-Based Cleanup';
+    }
+}
+
+// Perform database cleanup
+async function performDatabaseCleanup() {
+    const button = document.getElementById('cleanupBtn');
+    if (!button) return;
+
+    if (!confirm('This will remove old position records to optimize database performance. Continue?')) {
+        return;
+    }
+
+    button.disabled = true;
+    button.textContent = '🧹 Cleaning...';
+
+    try {
+        const response = await fetch('/admin/cleanup-positions', {
+            method: 'POST'
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showMessage('cleanupMessage', result.message, 'success');
+            loadDatabaseStats(); // Refresh stats
+        } else {
+            showMessage('cleanupMessage', result.message, 'error');
+        }
+
+    } catch (error) {
+        showMessage('cleanupMessage', 'Cleanup failed: ' + error.message, 'error');
+    } finally {
+        button.disabled = false;
+        button.textContent = '🧹 Clean Up Old Records';
+    }
+}
+
+// Enable cleanup buttons when data is loaded
+function enableCleanupButton() {
+    const button = document.getElementById('statusCleanupBtn');
+    if (button) {
+        button.disabled = false;
+    }
+}
+
+function enableDatabaseCleanupButton() {
+    const button = document.getElementById('cleanupBtn');
+    if (button) {
+        button.disabled = false;
+    }
+}
+
+// Show/hide messages
+function showMessage(elementId, message, type) {
+    const element = document.getElementById(elementId);
+    if (!element) return;
+
+    element.textContent = message;
+    element.className = `cleanup-message ${type}`;
+    element.style.display = 'block';
+
+    // Auto-hide success messages after 5 seconds
+    if (type === 'success') {
+        setTimeout(() => {
+            element.style.display = 'none';
+        }, 5000);
+    }
+}
+
+function hideMessage(elementId) {
+    const element = document.getElementById(elementId);
+    if (element) {
+        element.style.display = 'none';
+    }
 }
 
 // Update element content with null checking
@@ -215,6 +425,7 @@ function showFallbackStats() {
     updateElement('activeShips', 'Loading...');
     updateElement('managedShips', 'Loading...');
     updateElement('dbRecords', 'Loading...');
+    updateElement('aisMessageCount', 'Loading...');
 }
 
 // Format numbers with thousand separators
@@ -228,12 +439,9 @@ function startStatisticsRefresh() {
     // Refresh every 30 seconds
     setInterval(() => {
         loadStatistics();
+        loadPositionStatistics();
+        loadAISServiceStatus();
     }, 30000);
-
-    // Refresh cleanup stats every 60 seconds
-    setInterval(() => {
-        loadCleanupStats();
-    }, 60000);
 }
 
 // Add interactive effects
@@ -364,7 +572,7 @@ function addStatCardAnimations() {
             50% { transform: scale(1.05); }
             100% { transform: scale(1); }
         }
-        
+
         @keyframes fadeIn {
             from {
                 opacity: 0;
@@ -375,15 +583,59 @@ function addStatCardAnimations() {
                 transform: translateY(0);
             }
         }
-        
+
         .fade-in {
             animation: fadeIn 0.6s ease forwards;
         }
-        
+
         .section.fade-in,
         .hero-section.fade-in {
             opacity: 1 !important;
             transform: translateY(0) !important;
+        }
+
+        .cleanup-message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .cleanup-message.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .cleanup-message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .cleanup-btn {
+            padding: 8px 16px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        .cleanup-btn.primary {
+            background-color: #007bff;
+            color: white;
+        }
+
+        .cleanup-btn.secondary {
+            background-color: #6c757d;
+            color: white;
+        }
+
+        .cleanup-btn:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+            opacity: 0.6;
         }
     `;
     document.head.appendChild(style);
@@ -394,14 +646,16 @@ document.addEventListener('visibilitychange', function() {
     if (!document.hidden) {
         // Page became visible, refresh stats
         loadStatistics();
-        loadCleanupStats();
+        loadPositionStatistics();
+        loadAISServiceStatus();
     }
 });
 
 // Handle window focus
 window.addEventListener('focus', function() {
     loadStatistics();
-    loadCleanupStats();
+    loadPositionStatistics();
+    loadAISServiceStatus();
 });
 
 // Utility function for smooth scrolling (if needed)
@@ -430,6 +684,26 @@ function logPerformanceMetrics() {
     }
 }
 
+function startCleanupCountdown(nextTime) {
+    function updateCountdown() {
+        const now = new Date();
+        const diffMs = nextTime - now;
+
+        if (diffMs <= 0) {
+            updateElement('nextStatusCleanup', 'Due now');
+            return;
+        }
+
+        const minutes = Math.floor(diffMs / 60000);
+        const seconds = Math.floor((diffMs % 60000) / 1000);
+        updateElement('nextStatusCleanup', `in ${minutes}m ${seconds}s`);
+    }
+
+    updateCountdown();
+    setInterval(updateCountdown, 1000);
+}
+
+
 // Log performance metrics when page is fully loaded
 window.addEventListener('load', function() {
     setTimeout(logPerformanceMetrics, 100);
@@ -438,8 +712,9 @@ window.addEventListener('load', function() {
 // Export functions for potential external use
 window.InfoPage = {
     loadStatistics,
-    loadCleanupStats,
+    loadPositionStatistics,
+    loadAISServiceStatus,
+    loadDatabaseStats,
     updateStatistics,
-    smoothScrollTo,
-    handleCleanup
+    smoothScrollTo
 };

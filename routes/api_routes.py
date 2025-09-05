@@ -1,36 +1,5 @@
-"""
-Flask routes for SpyFleet application.
-Organized by functionality: views, API endpoints, and debug routes.
-"""
-
-from flask import render_template, jsonify, request
+from flask import jsonify, request
 from database import AISDatabase
-
-
-def register_routes(app):
-    """Register all application routes."""
-    register_view_routes(app)
-    register_api_routes(app)
-    register_debug_routes(app)
-
-
-def register_view_routes(app):
-    """Register HTML view routes."""
-
-    @app.route("/")
-    def index():
-        """Main map view."""
-        return render_template("map.html")
-
-    @app.route("/track")
-    def track_ships():
-        """Track ships management page."""
-        return render_template("trackships.html")
-
-    @app.route("/info")
-    def info():
-        """Information page."""
-        return render_template("info.html")
 
 
 def register_api_routes(app):
@@ -53,7 +22,7 @@ def register_api_routes(app):
     @app.route("/db/ships")
     def get_db_ships():
         """Get recent ships from database."""
-        recent_ships = AISDatabase.get_recent_ships(hours=24)
+        recent_ships = AISDatabase.get_recent_ships()
         return jsonify({"ships": recent_ships})
 
     @app.route("/db/ship/<mmsi>")
@@ -117,8 +86,8 @@ def register_api_routes(app):
             return jsonify({"success": False, "message": "MMSI is required"}), 400
 
         mmsi = data['mmsi'].strip()
-        name = data.get('name', '').strip() or None
-        notes = data.get('notes', '').strip() or None
+        name = (data.get('name') or '').strip() or None
+        notes = (data.get('notes') or '').strip() or None
         added_by = data.get('added_by', 'User')
 
         result = AISDatabase.add_tracked_ship(mmsi, name, notes, added_by)
@@ -146,8 +115,8 @@ def register_api_routes(app):
         if not data:
             return jsonify({"success": False, "message": "No data provided"}), 400
 
-        name = data.get('name', '').strip() or None
-        notes = data.get('notes', '').strip() or None
+        name = (data.get('name') or '').strip() or None
+        notes = (data.get('notes') or '').strip() or None
 
         result = AISDatabase.update_tracked_ship(mmsi, name, notes)
 
@@ -171,61 +140,9 @@ def register_api_routes(app):
             result = AISDatabase.remove_tracked_ship(mmsi)
         else:
             # Add to tracking
-            name = data.get('name', '').strip() or None
-            notes = data.get('notes', '').strip() or None
+            name = (data.get('name') or '').strip() or None
+            notes = (data.get('notes') or '').strip() or None
             added_by = data.get('added_by', 'User')
             result = AISDatabase.add_tracked_ship(mmsi, name, notes, added_by)
 
         return jsonify(result)
-
-
-def register_debug_routes(app):
-    """Register debug and maintenance endpoints."""
-
-    @app.route("/debug")
-    def debug():
-        """Debug endpoint to see raw data."""
-        from services.ais_service import AISService
-        ais_service = AISService.get_instance()
-
-        db_stats = AISDatabase.get_database_stats()
-        buffer_stats = ais_service.multipart_buffer.get_stats() if ais_service else {}
-
-        return jsonify({
-            "ships_count": len(ais_service.ships) if ais_service else 0,
-            "ships": ais_service.ships if ais_service else {},
-            "details": ais_service.ship_details if ais_service else {},
-            "multipart_buffer": buffer_stats,
-            "database_stats": db_stats
-        })
-
-    @app.route("/db/cleanup")
-    def cleanup_database():
-        """Manual database cleanup endpoint."""
-        deleted_count = AISDatabase.cleanup_old_positions(days=7)
-        return jsonify({
-            "message": "Database cleanup completed",
-            "deleted_positions": deleted_count
-        })
-
-    @app.route("/admin/cleanup-stats")
-    def cleanup_stats():
-        """Get cleanup statistics."""
-        stats = AISDatabase.get_cleanup_stats()
-        return jsonify(stats)
-
-    @app.route("/admin/cleanup-positions", methods=["POST"])
-    def cleanup_positions():
-        """Clean up old position records."""
-        try:
-            deleted_count = AISDatabase.cleanup_old_positions()
-            return jsonify({
-                "success": True,
-                "message": f"Successfully cleaned up {deleted_count:,} old position records",
-                "deleted_count": deleted_count
-            })
-        except Exception as e:
-            return jsonify({
-                "success": False,
-                "message": f"Cleanup failed: {str(e)}"
-            }), 500

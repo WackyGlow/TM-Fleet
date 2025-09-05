@@ -26,17 +26,35 @@ class Config:
     DB_CLEANUP_INTERVAL_MESSAGES = int(os.environ.get('DB_CLEANUP_INTERVAL_MESSAGES', 10000))
     DB_CLEANUP_DAYS = int(os.environ.get('DB_CLEANUP_DAYS', 7))
 
+    # Status-based position cleanup settings
+    UNDERWAY_POSITION_TIMEOUT_MINUTES = int(os.environ.get('UNDERWAY_POSITION_TIMEOUT_MINUTES', 2))
+    MOORED_POSITION_TIMEOUT_HOURS = int(os.environ.get('MOORED_POSITION_TIMEOUT_HOURS', 1))
+    STATUS_CLEANUP_INTERVAL_MINUTES = int(os.environ.get('STATUS_CLEANUP_INTERVAL_MINUTES', 5))
+
+    # Enable/disable automatic status-based cleanup
+    ENABLE_STATUS_CLEANUP = os.environ.get('ENABLE_STATUS_CLEANUP', 'True').lower() == 'true'
+
 
 class DevelopmentConfig(Config):
     """Development configuration."""
     DEBUG = True
     AIS_UDP_PORT = 15200
 
+    # More frequent cleanup in development for testing
+    STATUS_CLEANUP_INTERVAL_MINUTES = 2  # Every 2 minutes in dev
+    UNDERWAY_POSITION_TIMEOUT_MINUTES = 1  # 1 minute for testing
+    MOORED_POSITION_TIMEOUT_HOURS = 1  # 1 hour
+
 
 class ProductionConfig(Config):
     """Production configuration."""
     DEBUG = False
     AIS_UDP_PORT = 15100
+
+    # Production cleanup settings
+    STATUS_CLEANUP_INTERVAL_MINUTES = 5  # Every 5 minutes
+    UNDERWAY_POSITION_TIMEOUT_MINUTES = 2
+    MOORED_POSITION_TIMEOUT_HOURS = 2
 
 
 # Configuration mapping
