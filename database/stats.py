@@ -24,3 +24,37 @@ class StatsMixin:
         except Exception as e:
             print(f"❌ Error getting database stats: {e}")
             return {}
+
+    @staticmethod
+    def get_position_age_stats(underway_minutes=2, moored_hours=1):
+        """Detailed position statistics grouped by nav status."""
+        current_time = datetime.now(UTC)
+        underway_cutoff = current_time - timedelta(minutes=underway_minutes)
+        moored_cutoff = current_time - timedelta(hours=moored_hours)
+
+        underway_q = Position.query.filter(~Position.nav_status.in_([1, 5, 6]))
+        moored_q = Position.query.filter(Position.nav_status.in_([1, 5, 6]))
+        unknown_q = Position.query.filter(Position.nav_status.is_(None))
+
+        # Counts
+        underway_total = underway_q.count()
+        moored_total = moored_q.count()
+        unknown_total = unknown_q.count()
+
+        underway_old = underway_q.filter(Position.timestamp < underway_cutoff).count()
+        moored_old = moored_q.filter(Position.timestamp < moored_cutoff).count()
+        unknown_old = unknown_q.filter(Position.timestamp < moored_cutoff).count()
+
+        underway_ships = db.session.query(Position.mmsi).filter(~Position.nav_status.in_([1, 5, 6])).distinct().count()
+        moored_ships = db.session.query(Position.mmsi).filter(Position.nav_status.in_([1, 5, 6])).distinct().count()
+
+        return {
+            "underway_ships": underway_ships,
+            "underway_total_positions": underway_total,
+            "old_underway_positions": underway_old,
+            "moored_ships": moored_ships,
+            "moored_total_positions": moored_total,
+            "old_moored_positions": moored_old,
+            "unknown_total_positions": unknown_total,
+            "unknown_old_positions": unknown_old,
+        }
